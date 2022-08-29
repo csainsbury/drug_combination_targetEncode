@@ -1,0 +1,35 @@
+drug time series information script sequence
+
+1. drug_dataPrep.ipynb 
+    run once for each input file (3 input files 2000 - 2017)
+    gets around the R issues with reading the files (inconsistent column numbers etc)
+    saves out
+    
+2. drug_dataPrep_r.R
+    reads in and concatenates the 3 files above
+    applies date cutoffs
+    takes the top n occuring drugs
+    saves out
+    
+3. timeSeries_prep.ipynb
+    fills time series to one reading each month
+    performs lvcf interpolation
+    saves out
+    
+4. drug_combinations.R
+    reads in time series
+    generates per month combinations in alphabetical order
+    saves out
+    
+## analysis plan
+
+i. for first version establish absolute date cut off:
+    train 2010 - 2015
+    require alive at end train period
+    outcome all cause mortality 2015 - 2016
+    include all durations of therapy information
+    left and right pad with 'nil'
+ii. mean target encode each combination - ? with and without weighting for time prior to outcome assessment
+iii. embed into phase space ?dimension n
+iv. autoencoder embedding
+v. classifier
