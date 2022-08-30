@@ -1,5 +1,6 @@
 library(data.table)
 library(tidyverse)
+library(caret)
 
 x <- fread('~/Documents/data/x_out.csv')
 x <- x[, 1:(ncol(x) - 1)]
@@ -56,35 +57,6 @@ study_group <- merge(export, death, by.x = 'LinkId', by.y = 'LinkId', all.x = T)
 # train:   (last_date - (5y + 18 months)) to (last_date - 18 months)
 # outcome: (last_date - 18 months) to last_date
 
-train_years = 5
-outcome_years = 1.5
-
-train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.25) + (outcome_years*365.25)))]
-# require alive at end train
-train_cut$alive_flag <- ifelse(is.na(train_cut$DeathDate) == TRUE, 1, 0)
-train_cut$include <- ifelse(train_cut$alive_flag == 1 | train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
-train_cut <- train_cut[include == 1]
-
-# add outcome flag
-train_cut$outcome <- ifelse(train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
-train_cut$outcome[is.na(train_cut$outcome)] <- 0
-
-# replace all commas in the drug combination col
-train_cut$comb <- gsub(',', ';', train_cut$comb, ignore.case=TRUE)
-
-# ensure ID is numeric
-train_cut$LinkId <- as.numeric(train_cut$LinkId)
-
-# do mean target encoding in R
-# summarise the rare categories
-n_rare_limit <- 5
-x <- as.data.frame(table(train_cut$comb))
-x <- x[order(-x$Freq), ]
-plot(x$Freq, xlim = c(0, 1000), ylim = c(0, 200))
-abline(a = n_rare_limit, b = 0)
-
-print(which(x$Freq < n_rare_limit)[1])
-
 # target encoding function
 # from:: https://medium.com/@darnelbolaos/target-encoding-function-with-r-8a037b219fb7
 target_enc <- function(data, enc_col, tar_col, k_col, kmin, kmax){
@@ -115,28 +87,56 @@ target_enc <- function(data, enc_col, tar_col, k_col, kmin, kmax){
   
 }
 
-    # convert train_cut to tibble
-    data_train <- train_cut
-    
-    #reduce to single occurence of each drug combination per ID
-    data_ids <- unique(data_train$LinkId)
-    for (j in c(1:length(data_ids))) {
-      sub <- data_train[LinkId == data_ids[j]]
-      first_occurence <- sub[match(unique(sub$comb), sub$comb),]
+train_years = 5
+outcome_years = 1.5
+
+train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.25) + (outcome_years*365.25)))]
+# require alive at end train
+train_cut$alive_flag <- ifelse(is.na(train_cut$DeathDate) == TRUE, 1, 0)
+train_cut$include <- ifelse(train_cut$alive_flag == 1 | train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
+train_cut <- train_cut[include == 1]
+
+# add outcome flag
+train_cut$outcome <- ifelse(train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
+train_cut$outcome[is.na(train_cut$outcome)] <- 0
+
+# replace all commas in the drug combination col
+train_cut$comb <- gsub(',', ';', train_cut$comb, ignore.case=TRUE)
+
+# ensure ID is numeric
+train_cut$LinkId <- as.numeric(train_cut$LinkId)
+
+## kfold split in here
+      # kfold creation
+      set.seed(100)
       
-      if (j == 1) {
-        output <- first_occurence
-      } else {
-        output <- rbind(output, first_occurence)
-      }
-    }
-    
+      k = 10
+      
+      # define training control
+      flds <- createFolds(data$outcome, k, list = T, returnTrain = F)
+      
+      for (kfold in c(1:k)) {
+        
+        dat  <- train_cut[-flds[[kfold]], ]
+        test <- train_cut[flds[[kfold]], ]
+        
+        #reduce to single occurence of each drug combination per ID
+        data_ids <- unique(dat$LinkId)
+        for (j in c(1:length(data_ids))) {
+          sub <- dat[LinkId == data_ids[j]]
+          first_occurence <- sub[match(unique(sub$comb), sub$comb),]
+          
+          if (j == 1) {
+            output <- first_occurence
+          } else {
+            output <- rbind(output, first_occurence)
+          }
+        }
+        
         # target encoding
         data <- as_tibble(output)
-        
         data <- data %>% mutate(comb = fct_lump_min(comb, 10)) # 10 gives reasonable balance
-        
-        n_kfold <- 20
+        n_kfold <- 20 # target encoding kfold
         
         data <- data %>% mutate(k = sample(1:n_kfold, nrow(.), replace = TRUE))
         
@@ -152,6 +152,57 @@ target_enc <- function(data, enc_col, tar_col, k_col, kmin, kmax){
         
         head(lookup, 20)
         tail(lookup, 20)
+        
+      }
+
+# # do mean target encoding in R
+# # summarise the rare categories
+# n_rare_limit <- 5
+# x <- as.data.frame(table(train_cut$comb))
+# x <- x[order(-x$Freq), ]
+# plot(x$Freq, xlim = c(0, 1000), ylim = c(0, 200))
+# abline(a = n_rare_limit, b = 0)
+# 
+# print(which(x$Freq < n_rare_limit)[1])
+
+
+    # # convert train_cut to tibble
+    # data_train <- train_cut
+    # 
+    # #reduce to single occurence of each drug combination per ID
+    # data_ids <- unique(data_train$LinkId)
+    # for (j in c(1:length(data_ids))) {
+    #   sub <- data_train[LinkId == data_ids[j]]
+    #   first_occurence <- sub[match(unique(sub$comb), sub$comb),]
+    #   
+    #   if (j == 1) {
+    #     output <- first_occurence
+    #   } else {
+    #     output <- rbind(output, first_occurence)
+    #   }
+    # }
+    
+        # # target encoding
+        # data <- as_tibble(output)
+        # 
+        # data <- data %>% mutate(comb = fct_lump_min(comb, 10)) # 10 gives reasonable balance
+        # 
+        # n_kfold <- 20
+        # 
+        # data <- data %>% mutate(k = sample(1:n_kfold, nrow(.), replace = TRUE))
+        # 
+        # x <- target_enc(data = data, enc_col = "comb",
+        #                 tar_col = "outcome", k_col = "k",
+        #                 kmin = 1, kmax = n_kfold)
+        # 
+        # hist(x$tar_enc_comb, 1000)
+        
+        # # from here can generate a lookup table of the target encoding value per combination
+        # lookup <- x[match(unique(x$comb), x$comb),]
+        # lookup <- lookup[order(-lookup$tar_enc_comb), ]
+        # 
+        # head(lookup, 20)
+        # tail(lookup, 20)
 
         
         
