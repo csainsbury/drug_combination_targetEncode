@@ -144,14 +144,16 @@ train_cut$LinkId <- as.numeric(train_cut$LinkId)
                         tar_col = "outcome", k_col = "k",
                         kmin = 1, kmax = n_kfold)
         
-        hist(x$tar_enc_comb, 1000)
+        hist(x$tar_enc_comb, 500, ylim = c(0, 1000))
         
         # from here can generate a lookup table of the target encoding value per combination
         lookup <- x[match(unique(x$comb), x$comb),]
         lookup <- lookup[order(-lookup$tar_enc_comb), ]
         
-        head(lookup, 20)
-        tail(lookup, 20)
+        # head(lookup, 20)
+        # tail(lookup, 20)
+        print(lookup$comb[1:4])
+        print(lookup$tar_enc_comb[1:4])
         
       }
 
