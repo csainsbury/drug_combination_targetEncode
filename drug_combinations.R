@@ -206,7 +206,7 @@ train_cut$LinkId <- as.numeric(train_cut$LinkId)
 
         
         
-## export represents a combination per month for all drugs prescribed for 15k IDs
+# export represents a combination per month for all drugs prescribed for 15k IDs
 write.table(train_cut, file = paste0('~/Documents/data/analysis_data.csv'), sep = ',', row.names = F)
 
 
