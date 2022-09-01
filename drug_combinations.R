@@ -102,20 +102,25 @@ train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.2
   train_cut$outcome <- ifelse(train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
   train_cut$outcome[is.na(train_cut$outcome)] <- 0
 
-# replace all commas in the drug combination col
-train_cut$comb <- gsub(',', ';', train_cut$comb, ignore.case=TRUE)
+  # replace all commas in the drug combination col
+  train_cut$comb <- gsub(',', ';', train_cut$comb, ignore.case=TRUE)
 
-# ensure ID is numeric
-train_cut$LinkId <- as.numeric(train_cut$LinkId)
+  # ensure ID is numeric
+  train_cut$LinkId <- as.numeric(train_cut$LinkId)
 
 ## kfold split in here
       # kfold creation
       set.seed(100)
-      
       k = 10
       
+      # frame with IDs and outcome
+      train_ids <- train_cut
+      train_ids[, 'n' := c(1: .N), by=.(LinkId)]
+      train_ids <- train_ids[n == 1]
+      train_ids <- train_ids %>% select(LinkId, outcome)
+      
       # define training control
-      flds <- createFolds(data$outcome, k, list = T, returnTrain = F)
+      flds <- createFolds(train_ids$outcome, k, list = T, returnTrain = F)
       
       for (kfold in c(1:k)) {
         
