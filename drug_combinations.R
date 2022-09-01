@@ -107,8 +107,55 @@ train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.2
 
   # ensure ID is numeric
   train_cut$LinkId <- as.numeric(train_cut$LinkId)
+  
+  # simplify
+  train_cut <- train_cut %>% select(LinkId, PrescriptionDateTime, comb, outcome)
 
 ## kfold split in here
+  
+target_encode_lookup <- function(dat, min_threshold = 10) {
+  #reduce to single occurence of each drug combination per ID
+  data_ids <- unique(dat$LinkId)
+  for (j in c(1:length(data_ids))) {
+    sub <- dat[LinkId == data_ids[j]]
+    first_occurence <- sub[match(unique(sub$comb), sub$comb),]
+    
+    if (j == 1) {
+      output <- first_occurence
+    } else {
+      output <- rbind(output, first_occurence)
+    }
+  }
+  
+  # target encoding
+  data <- as_tibble(output)
+  data <- data %>% mutate(comb = fct_lump_min(comb, min_threshold)) # 10 gives reasonable balance
+  n_kfold <- 20 # target encoding kfold
+  
+  data <- data %>% mutate(k = sample(1:n_kfold, nrow(.), replace = TRUE))
+  
+  x <- target_enc(data = data, enc_col = "comb",
+                  tar_col = "outcome", k_col = "k",
+                  kmin = 1, kmax = n_kfold)
+  
+  hist(x$tar_enc_comb, 500, ylim = c(0, 1000))
+  
+  # from here can generate a lookup table of the target encoding value per combination
+  # lookup <- x[match(unique(x$comb), x$comb),]
+  # lookup <- lookup[order(-lookup$tar_enc_comb), ]
+  
+  lookup <- lookup %>% select(comb, tar_enc_comb)
+  lookup <- as.data.frame(lookup)
+  
+  return(lookup)
+}  
+  
+  # head(lookup, 20)
+  # tail(lookup, 20)
+  print(lookup$comb[1:10])
+  print(lookup$tar_enc_comb[1:4])
+  
+  
       # kfold creation
       set.seed(100)
       k = 10
@@ -124,43 +171,17 @@ train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.2
       
       for (kfold in c(1:k)) {
         
-        dat  <- train_cut[-flds[[kfold]], ]
-        test <- train_cut[flds[[kfold]], ]
+        # define train/test by id
+        dat  <- train_ids[-flds[[kfold]], ]
+        test <- train_ids[flds[[kfold]], ]
+        # expand to include all data
+        dat <- merge(dat, train_cut, by.x = c('LinkId', 'outcome'), by.y = c('LinkId', 'outcome'))
+        test <- merge(test, train_cut, by.x = c('LinkId', 'outcome'), by.y = c('LinkId', 'outcome'))
         
-        #reduce to single occurence of each drug combination per ID
-        data_ids <- unique(dat$LinkId)
-        for (j in c(1:length(data_ids))) {
-          sub <- dat[LinkId == data_ids[j]]
-          first_occurence <- sub[match(unique(sub$comb), sub$comb),]
-          
-          if (j == 1) {
-            output <- first_occurence
-          } else {
-            output <- rbind(output, first_occurence)
-          }
-        }
+        lookup <- target_encode_lookup(dat, 8)
         
-        # target encoding
-        data <- as_tibble(output)
-        data <- data %>% mutate(comb = fct_lump_min(comb, 10)) # 10 gives reasonable balance
-        n_kfold <- 20 # target encoding kfold
-        
-        data <- data %>% mutate(k = sample(1:n_kfold, nrow(.), replace = TRUE))
-        
-        x <- target_enc(data = data, enc_col = "comb",
-                        tar_col = "outcome", k_col = "k",
-                        kmin = 1, kmax = n_kfold)
-        
-        hist(x$tar_enc_comb, 500, ylim = c(0, 1000))
-        
-        # from here can generate a lookup table of the target encoding value per combination
-        lookup <- x[match(unique(x$comb), x$comb),]
-        lookup <- lookup[order(-lookup$tar_enc_comb), ]
-        
-        # head(lookup, 20)
-        # tail(lookup, 20)
-        print(lookup$comb[1:4])
-        print(lookup$tar_enc_comb[1:4])
+        # add target encoded values to training data
+        dat <- merge(dat, lookup, by.x = 'comb', by.y = 'comb')
         
       }
 
