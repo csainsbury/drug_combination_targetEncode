@@ -17,11 +17,6 @@ for (i in c(1:length(ids))) {
   sub <- x[LinkId == ids[i]]
   sub[, 'comb' := as.character(paste0(attr(table(DrugName), 'dimnames'))), by=.(PrescriptionDateTime)]
   
-  # remove c and brackets
-  # this leaves inverted commas and commas, but this doesn't matter as looking for unique combinations
-  # sub$urid <- c(1:nrow(sub))
-  # sub[, 'combination' := substr(comb, 3, (nchar(comb) - 1)), by=.(urid)]
-  
   t.first <- sub[match(unique(sub$PrescriptionDateTime), sub$PrescriptionDateTime),]
   t.first <- t.first %>% select(LinkId, PrescriptionDateTime, comb)
   t.first <- t.first[order(t.first$PrescriptionDateTime), ]
@@ -88,17 +83,24 @@ target_enc <- function(data, enc_col, tar_col, k_col, kmin, kmax){
 }
 
 train_years = 5
-outcome_years = 1.5
+outcome_years = 2
 
 train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.25) + (outcome_years*365.25)))]
-# require alive at end train
-train_cut$alive_flag <- ifelse(is.na(train_cut$DeathDate) == TRUE, 1, 0)
-train_cut$include <- ifelse(train_cut$alive_flag == 1 | train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
-train_cut <- train_cut[include == 1]
 
-# add outcome flag
-train_cut$outcome <- ifelse(train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
-train_cut$outcome[is.na(train_cut$outcome)] <- 0
+  # require alive at end train
+  end_train_date <- (last_date - (outcome_years*365.25))
+  train_cut$alive_flag <- ifelse(is.na(train_cut$DeathDate) == TRUE, 1, 0)
+  train_cut$include <- ifelse(train_cut$alive_flag == 1 | train_cut$DeathDate >= end_train_date, 1, 0)
+  train_cut <- train_cut[include == 1]
+  # require an entry within the last (end_buffer_months) months
+  end_buffer_months = 6
+  buffer_cut <- end_train_date - (end_buffer_months * ((365.25/12)))
+  train_cut[, 'flag_include' := ifelse(max(PrescriptionDateTime) > buffer_cut, 1, 0), by =.(LinkId)]
+  train_cut <- train_cut[flag_include == 1]
+
+  # add outcome flag
+  train_cut$outcome <- ifelse(train_cut$DeathDate >= (last_date - (outcome_years*365.25)), 1, 0)
+  train_cut$outcome[is.na(train_cut$outcome)] <- 0
 
 # replace all commas in the drug combination col
 train_cut$comb <- gsub(',', ';', train_cut$comb, ignore.case=TRUE)
