@@ -35,5 +35,5 @@ iv. autoencoder embedding
 v. classifier
 
 ## notes
-need to decide bin size during (1) and save out in a config file
-if no prescription per ID within one time neeed to add one with 'nil'
+- need to decide bin size during (1) and save out in a config file
+- if no prescription per ID within one time neeed to add one with 'nil' at the beginning of the training window to allow ffill of all bins
