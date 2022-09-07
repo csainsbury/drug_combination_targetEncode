@@ -33,3 +33,7 @@ ii. mean target encode each combination - ? with and without weighting for time 
 iii. embed into phase space ?dimension n
 iv. autoencoder embedding
 v. classifier
+
+## notes
+need to decide bin size during (1) and save out in a config file
+if no prescription per ID within one time neeed to add one with 'nil'

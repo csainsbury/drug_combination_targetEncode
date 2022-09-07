@@ -121,6 +121,12 @@ train_cut <- study_group[PrescriptionDateTime >= (last_date- ((train_years*365.2
   # ensure ID is numeric
   train_cut$LinkId <- as.numeric(train_cut$LinkId)
   
+    # investigate how much data is available per ID
+    e <- train_cut
+    e[, 'n' := c(1: .N), by =. (LinkId)]
+    e <- e[n==1]
+    h <- hist(e$bins_of_data, 100)
+  
   # simplify
   train_cut <- train_cut %>% select(LinkId, PrescriptionDateTime, comb, outcome)
 
@@ -190,7 +196,7 @@ target_encode_lookup <- function(dat, min_threshold = 10) {
         dat <- merge(dat, train_cut, by.x = c('LinkId', 'outcome'), by.y = c('LinkId', 'outcome'))
         test <- merge(test, train_cut, by.x = c('LinkId', 'outcome'), by.y = c('LinkId', 'outcome'))
         
-        lookup <- target_encode_lookup(dat, 10)
+        lookup <- target_encode_lookup(dat, 60)
         
         # add target encoded values to training data
         dat <- merge(dat, lookup, by.x = 'comb', by.y = 'comb')
