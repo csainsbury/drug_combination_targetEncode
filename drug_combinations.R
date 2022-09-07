@@ -32,6 +32,19 @@ for (i in c(1:length(ids))) {
 ## export represents a combination per month for all drugs prescribed for 15k IDs
 write.table(export, file = paste0('~/Documents/data/export_drugCombinationsPerID.csv'), sep = ',', row.names = F)
 
+export <- fread(paste0('~/Documents/data/export_drugCombinationsPerID.csv'))
+
+# add a column (n_bins) that records the number of time bins that a drug combination is prescribed for
+export[, 'n_bins' := .N, by=.(LinkId, comb)]
+# number of time bins for which there is data per ID
+export[, 'bins_of_data' := .N, by=.(LinkId)]
+
+  # investigate how much data is available per ID
+  e <- export
+  e[, 'n' := c(1: .N), by =. (LinkId)]
+  e <- e[n==1]
+  hist(e$bins_of_data, 100)
+
 # explore most common combinations
 x <- as.data.frame(table(export$comb))
 x <- x[order(-x$Freq), ]
