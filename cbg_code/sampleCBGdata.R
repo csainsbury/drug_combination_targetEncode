@@ -10,7 +10,7 @@ colnames(subset) <- c('CHI', 'location', 'dateTime', 'Glu', 'op')
 subset$CHI <- as.numeric(subset$CHI)
 subset$Glu <- ifelse(subset$Glu == '<1.1', 1, subset$Glu)
 subset$Glu <- ifelse(subset$Glu == '>27.8', 1, subset$Glu)
-
+subset$dateTime <- as.POSIXct(subset$dateTime, format = "%d/%m/%Y %H:%M")
 
 ids <- as.data.table(table(subset$CHI))
   ids$V1 <- as.numeric(ids$V1)
@@ -42,3 +42,10 @@ id_start <- 10000
 ids$uID <- c(id_start:(id_start + (nrow(ids) - 1)))
 
 m <- merge(ids, subset, by.x = 'V1', by.y = 'CHI')
+m <- m[order(-m$N, m$dateTime), ]
+head(m)
+
+  plot(m[V1 == 1108863493]$dateTime, m[V1 == 1108863493]$Glu)
+  lines(m[V1 == 1108863493]$dateTime, m[V1 == 1108863493]$Glu)
+  
+  
