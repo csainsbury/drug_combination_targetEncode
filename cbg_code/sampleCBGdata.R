@@ -5,8 +5,12 @@ library(tidyverse)
 
 x <- fread('~/Documents/data/CBGdata/aegis_010122-080822_qeuh.csv', header = F)
 
-subset <- x %>% select(V148, V150, V101, V104)
-colnames(subset) <- c('CHI', 'location', 'dateTime', 'Glu')
+subset <- x %>% select(V148, V150, V101, V104, V140)
+colnames(subset) <- c('CHI', 'location', 'dateTime', 'Glu', 'op')
+subset$CHI <- as.numeric(subset$CHI)
+subset$Glu <- ifelse(subset$Glu == '<1.1', 1, subset$Glu)
+subset$Glu <- ifelse(subset$Glu == '>27.8', 1, subset$Glu)
+
 
 ids <- as.data.table(table(subset$CHI))
   ids$V1 <- as.numeric(ids$V1)
@@ -36,3 +40,5 @@ ids <- ids[V1 != 1111111111 &
 ids <- ids[nchar(V1) >8]
 id_start <- 10000
 ids$uID <- c(id_start:(id_start + (nrow(ids) - 1)))
+
+m <- merge(ids, subset, by.x = 'V1', by.y = 'CHI')
