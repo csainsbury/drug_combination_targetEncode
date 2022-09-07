@@ -2,7 +2,7 @@ library(data.table)
 library(tidyverse)
 library(caret)
 
-x <- fread('~/Documents/data/x_out.csv')
+x <- fread('~/Documents/data/x_out_6Mbins.csv')
 x <- x[, 1:(ncol(x) - 1)]
 
 x <- data.table(x)
@@ -43,7 +43,7 @@ export[, 'bins_of_data' := .N, by=.(LinkId)]
   e <- export
   e[, 'n' := c(1: .N), by =. (LinkId)]
   e <- e[n==1]
-  hist(e$bins_of_data, 100)
+  h <- hist(e$bins_of_data, 100)
 
 # explore most common combinations
 x <- as.data.frame(table(export$comb))
@@ -154,19 +154,18 @@ target_encode_lookup <- function(dat, min_threshold = 10) {
   hist(x$tar_enc_comb, 500, ylim = c(0, 1000))
   
   # from here can generate a lookup table of the target encoding value per combination
-  # lookup <- x[match(unique(x$comb), x$comb),]
-  # lookup <- lookup[order(-lookup$tar_enc_comb), ]
+  lookup <- x[match(unique(x$comb), x$comb),]
+  lookup <- lookup[order(-lookup$tar_enc_comb), ]
   
   lookup <- lookup %>% select(comb, tar_enc_comb)
   lookup <- as.data.frame(lookup)
   
-  return(lookup)
-}  
-  
-  # head(lookup, 20)
-  # tail(lookup, 20)
   print(lookup$comb[1:10])
-  print(lookup$tar_enc_comb[1:4])
+  print(lookup$tar_enc_comb[1:10])
+  
+  plot(lookup$tar_enc_comb)
+  return(lookup)
+}
   
   
       # kfold creation
@@ -191,7 +190,7 @@ target_encode_lookup <- function(dat, min_threshold = 10) {
         dat <- merge(dat, train_cut, by.x = c('LinkId', 'outcome'), by.y = c('LinkId', 'outcome'))
         test <- merge(test, train_cut, by.x = c('LinkId', 'outcome'), by.y = c('LinkId', 'outcome'))
         
-        lookup <- target_encode_lookup(dat, 8)
+        lookup <- target_encode_lookup(dat, 10)
         
         # add target encoded values to training data
         dat <- merge(dat, lookup, by.x = 'comb', by.y = 'comb')
