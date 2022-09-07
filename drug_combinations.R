@@ -2,7 +2,7 @@ library(data.table)
 library(tidyverse)
 library(caret)
 
-x <- fread('~/Documents/data/x_out_6Mbins.csv')
+x <- fread('~/Documents/data/x_out_3Mbins.csv')
 x <- x[, 1:(ncol(x) - 1)]
 
 x <- data.table(x)
@@ -12,7 +12,7 @@ ids <- unique(x$LinkId)
 
 for (i in c(1:length(ids))) {
   
-  if(i%%100 == 0) {print(i)}
+  if(i%%1000 == 0) {print(paste0(i, ' of ', length(ids)))}
   
   sub <- x[LinkId == ids[i]]
   sub[, 'comb' := as.character(paste0(attr(table(DrugName), 'dimnames'))), by=.(PrescriptionDateTime)]
@@ -30,9 +30,9 @@ for (i in c(1:length(ids))) {
 }
 
 ## export represents a combination per month for all drugs prescribed for 15k IDs
-write.table(export, file = paste0('~/Documents/data/export_drugCombinationsPerID.csv'), sep = ',', row.names = F)
+write.table(export, file = paste0('~/Documents/data/export_drugCombinationsPerID_3Mbins.csv'), sep = ',', row.names = F)
 
-export <- fread(paste0('~/Documents/data/export_drugCombinationsPerID.csv'))
+export <- fread(paste0('~/Documents/data/export_drugCombinationsPerID_3Mbins.csv'))
 
 # add a column (n_bins) that records the number of time bins that a drug combination is prescribed for
 export[, 'n_bins' := .N, by=.(LinkId, comb)]
