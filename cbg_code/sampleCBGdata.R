@@ -45,7 +45,10 @@ m <- merge(ids, subset, by.x = 'V1', by.y = 'CHI')
 m <- m[order(-m$N, m$dateTime), ]
 head(m)
 
-  plot(m[V1 == 1108863493]$dateTime, m[V1 == 1108863493]$Glu)
-  lines(m[V1 == 1108863493]$dateTime, m[V1 == 1108863493]$Glu)
+  id_sort <- ids[order(-ids$N), ]
+  id = id_sort$V1[4]
+  plot(m[V1 == id]$dateTime, m[V1 == id]$Glu, col = as.factor(m[V1 == id]$location), pch = 16)
+  lines(m[V1 == id]$dateTime, m[V1 == id]$Glu, lwd = 0.4)
+  print(m[V1 == id]$location)
   
   
