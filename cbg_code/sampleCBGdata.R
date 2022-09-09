@@ -90,6 +90,7 @@ cf[, 'use_flag' := n_days_select(dateTime, cohort_selection_threshold, interval_
 
 use_cohort <- cf[use_flag == 1]
 
+write.table(use_cohort, file = paste0('~/Documents/data/CBGdata/time_series_cohort_', cohort_selection_threshold, 'days.csv'), sep = ',', row.names = F)
 
 
   
