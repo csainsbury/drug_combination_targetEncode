@@ -46,13 +46,18 @@ m <- merge(ids, subset, by.x = 'V1', by.y = 'CHI')
 m <- m[order(-m$N, m$dateTime), ]
 
 # identify each admission using 7 day lockout period
-
+# number of admissions (unix date time required):
+lockout = 7
+m$unix_dateTime <- returnUnixDateTime(m$dateTime)
+m[, 'n_admissions' := admission_N(unix_dateTime, lockout), by=.(V1)]
+# label each admission
+m[, 'admission_vec' := admission_N_vector(unix_dateTime, lockout), by=.(V1)]
 
 # add interval last-first measurement
-m[, 'interval_seconds' := as.numeric(max(dateTime) - min(dateTime)), by=.(V1)]
-m[, 'interval_days' := as.numeric(max(as.Date(dateTime)) - min(as.Date(dateTime))), by=.(V1)]
+m[, 'interval_seconds' := as.numeric(max(dateTime) - min(dateTime)), by=.(V1, admission_vec)]
+m[, 'interval_days' := as.numeric(max(as.Date(dateTime)) - min(as.Date(dateTime))), by=.(V1, admission_vec)]
 m <- m[order(m$V1, m$dateTime), ]
-m[, 'n' := c(1:.N), by=.(V1)]
+m[, 'n' := c(1:.N), by=.(V1, admission_vec)]
 
 single_m <- m[n==1]
 
@@ -62,18 +67,22 @@ abline(h = 10)
 
 # minimum number of admission duration days for study cohort
 # will equal train + test period
-cohort_selection_threshold <- 9
+cohort_selection_threshold <- 10
 last_id <- which(single_m$interval_days == cohort_selection_threshold)[length(which(single_m$interval_days == cohort_selection_threshold))]
 
 cohort <- single_m[1:last_id, ]
 print(dim(cohort))
 
-head(m)
+cf <- merge(cohort, m,
+                     by.x = c('V1'),
+                     by.y = c('V1'))
+cf <- cf %>% select(V1, N.y, uID.y, location.y, dateTime.y, Glu.y, op.y, unix_dateTime.y, n_admissions.y, admission_vec.y, interval_seconds.y, interval_days.y, n.y)
+colnames(cf) <- c('V1', 'N', 'uID', 'location', 'dateTime', 'Glu', 'op', 'unix_dateTime', 'n_admissions', 'admission_vec', 'interval_seconds', 'interval_days', 'n')
 
-  id_sort <- ids[order(-ids$N), ]
-  id = id_sort$V1[1]
-  plot(m[V1 == id]$dateTime, m[V1 == id]$Glu, col = as.factor(m[V1 == id]$location), pch = 16)
-  lines(m[V1 == id]$dateTime, m[V1 == id]$Glu, lwd = 0.4)
-  print(m[V1 == id]$location)
+# select random 10 period from each admission (use seconds to ensure enough data)
+n_days_select <- function(dateTime, min_threshold) {
+  
+}
+
   
   
