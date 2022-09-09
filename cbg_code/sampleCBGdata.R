@@ -15,6 +15,7 @@ subset$dateTime <- as.POSIXct(subset$dateTime, format = "%d/%m/%Y %H:%M")
 
 # remove inappropriate locations
 subset <- subset[location != 'RENALDIALYSIS']
+# may add ITU to this
 
 ids <- as.data.table(table(subset$CHI))
   ids$V1 <- as.numeric(ids$V1)
@@ -82,27 +83,13 @@ cf <- merge(cohort, m,
 cf <- cf %>% select(V1, N.y, uID.y, location.y, dateTime.y, Glu.y, op.y, unix_dateTime.y, n_admissions.y, interval_seconds.y, interval_days.y, n.y)
 colnames(cf) <- c('V1', 'N', 'uID', 'location', 'dateTime', 'Glu', 'op', 'unix_dateTime', 'n_admissions', 'interval_seconds', 'interval_days', 'n')
 
-# select random 10 period from each admission
-n_days_select <- function(dateTime, min_threshold, interval_days, n) {
-  
-  window_flag <- rep(0, length(dateTime))
-  
-  if(interval_days > min_threshold) {
-    days <- as.Date(dateTime)
-    days <- days[order(days)]
-    last_start_date <- max(days) - min_threshold
-    last_date_index <- which(days < last_start_date)[length(which(days < last_start_date))]
-    random_start <- sample(last_date_index, 1)
-    start_window <- days[random_start]
-    end_window <- start_window + min_threshold
-    window_flag <- ifelse((days >= start_window) & (days <= end_window), 1, 0)
-  } else {
-    window_flag <- rep(1, length(dateTime))
-  }
-  
-  return(window_flag)
-  
-}
+# label admissions within cf
+cf[, 'admission_vec' := admission_N_vector(unix_dateTime, lockout), by=.(V1)]
 
-  
+cf[, 'use_flag' := n_days_select(dateTime, cohort_selection_threshold, interval_days), by =.(V1, admission_vec)]
+
+use_cohort <- cf[use_flag == 1]
+
+
+
   

@@ -1,6 +1,8 @@
 require(berryFunctions)
 require(harmonicmeanp)
 
+## original functions
+
 # functions
 returnUnixDateTime<-function(date) {
   returnVal<-as.numeric(as.POSIXct(date, format="%d/%m/%Y %I:%M%p", tz="GMT"))
@@ -394,5 +396,29 @@ normalisedControlGradient <- function(input_1, input_2, timeBins, metric, type, 
   }
   
   return(list(TTR_sub_1, TTR_sub_2))
+  
+}
+
+## new functions
+
+# select random 10 period from each admission
+n_days_select <- function(dateTime, min_threshold, interval_days) {
+  
+  window_flag <- rep(0, length(dateTime))
+  
+  if(interval_days[1] > min_threshold) {
+    days <- as.Date(dateTime)
+    days <- days[order(days)]
+    last_start_date <- max(days) - min_threshold
+    last_date_index <- which(days < last_start_date)[length(which(days < last_start_date))]
+    random_start <- sample(last_date_index, 1)
+    start_window <- days[random_start]
+    end_window <- start_window + min_threshold
+    window_flag <- ifelse((days >= start_window) & (days <= end_window), 1, 0)
+  } else {
+    window_flag <- rep(1, length(dateTime))
+  }
+  
+  return(window_flag)
   
 }
