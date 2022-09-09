@@ -1,7 +1,8 @@
 # prep sample of CBG inpatient data for testing
-
 library(data.table)
 library(tidyverse)
+
+source('~/Documents/code/cbg_code/cbg_functions.R')
 
 x <- fread('~/Documents/data/CBGdata/aegis_010122-080822_qeuh.csv', header = F)
 
@@ -43,10 +44,34 @@ ids$uID <- c(id_start:(id_start + (nrow(ids) - 1)))
 
 m <- merge(ids, subset, by.x = 'V1', by.y = 'CHI')
 m <- m[order(-m$N, m$dateTime), ]
+
+# identify each admission using 7 day lockout period
+
+
+# add interval last-first measurement
+m[, 'interval_seconds' := as.numeric(max(dateTime) - min(dateTime)), by=.(V1)]
+m[, 'interval_days' := as.numeric(max(as.Date(dateTime)) - min(as.Date(dateTime))), by=.(V1)]
+m <- m[order(m$V1, m$dateTime), ]
+m[, 'n' := c(1:.N), by=.(V1)]
+
+single_m <- m[n==1]
+
+single_m <- single_m[order(-single_m$interval_days), ]
+plot(single_m$interval_days)
+abline(h = 10)
+
+# minimum number of admission duration days for study cohort
+# will equal train + test period
+cohort_selection_threshold <- 9
+last_id <- which(single_m$interval_days == cohort_selection_threshold)[length(which(single_m$interval_days == cohort_selection_threshold))]
+
+cohort <- single_m[1:last_id, ]
+print(dim(cohort))
+
 head(m)
 
   id_sort <- ids[order(-ids$N), ]
-  id = id_sort$V1[4]
+  id = id_sort$V1[1]
   plot(m[V1 == id]$dateTime, m[V1 == id]$Glu, col = as.factor(m[V1 == id]$location), pch = 16)
   lines(m[V1 == id]$dateTime, m[V1 == id]$Glu, lwd = 0.4)
   print(m[V1 == id]$location)
