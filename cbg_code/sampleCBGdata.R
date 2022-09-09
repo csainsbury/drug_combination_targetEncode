@@ -13,6 +13,9 @@ subset$Glu <- ifelse(subset$Glu == '<1.1', 1, subset$Glu)
 subset$Glu <- ifelse(subset$Glu == '>27.8', 1, subset$Glu)
 subset$dateTime <- as.POSIXct(subset$dateTime, format = "%d/%m/%Y %H:%M")
 
+# remove inappropriate locations
+subset <- subset[location != 'RENALDIALYSIS']
+
 ids <- as.data.table(table(subset$CHI))
   ids$V1 <- as.numeric(ids$V1)
   ids$V1[is.na(ids$V1)] <- 0
@@ -74,13 +77,30 @@ cohort <- single_m[1:last_id, ]
 print(dim(cohort))
 
 cf <- merge(cohort, m,
-                     by.x = c('V1'),
-                     by.y = c('V1'))
-cf <- cf %>% select(V1, N.y, uID.y, location.y, dateTime.y, Glu.y, op.y, unix_dateTime.y, n_admissions.y, admission_vec.y, interval_seconds.y, interval_days.y, n.y)
-colnames(cf) <- c('V1', 'N', 'uID', 'location', 'dateTime', 'Glu', 'op', 'unix_dateTime', 'n_admissions', 'admission_vec', 'interval_seconds', 'interval_days', 'n')
+                     by.x = c('V1', 'admission_vec'),
+                     by.y = c('V1', 'admission_vec'))
+cf <- cf %>% select(V1, N.y, uID.y, location.y, dateTime.y, Glu.y, op.y, unix_dateTime.y, n_admissions.y, interval_seconds.y, interval_days.y, n.y)
+colnames(cf) <- c('V1', 'N', 'uID', 'location', 'dateTime', 'Glu', 'op', 'unix_dateTime', 'n_admissions', 'interval_seconds', 'interval_days', 'n')
 
-# select random 10 period from each admission (use seconds to ensure enough data)
-n_days_select <- function(dateTime, min_threshold) {
+# select random 10 period from each admission
+n_days_select <- function(dateTime, min_threshold, interval_days, n) {
+  
+  window_flag <- rep(0, length(dateTime))
+  
+  if(interval_days > min_threshold) {
+    days <- as.Date(dateTime)
+    days <- days[order(days)]
+    last_start_date <- max(days) - min_threshold
+    last_date_index <- which(days < last_start_date)[length(which(days < last_start_date))]
+    random_start <- sample(last_date_index, 1)
+    start_window <- days[random_start]
+    end_window <- start_window + min_threshold
+    window_flag <- ifelse((days >= start_window) & (days <= end_window), 1, 0)
+  } else {
+    window_flag <- rep(1, length(dateTime))
+  }
+  
+  return(window_flag)
   
 }
 
