@@ -1,3 +1,5 @@
+# download from google drive to downloads folder as .csv
+
 library(data.table)
 x <- fread('~/Downloads/BMI_weight_trajectory - current.csv', stringsAsFactors = F)
 x$V1 <- as.Date(x$V1, format = '%d/%m/%Y')
