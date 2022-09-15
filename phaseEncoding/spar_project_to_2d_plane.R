@@ -117,38 +117,92 @@ tann <- function(a){
   return(a)
 }
 
-rows = 1000
+# generate dataset
+rows = 2000
 p = data.frame(matrix(nrow = rows, ncol = 0))
-p$x = rnorm(rows, 4, 1)
-p$y = rnorm(rows, 4, 4)
+p$x = rnorm(rows, 0, 1)
+p$y = rnorm(rows, 0, 6)
 
 plot(p$x, p$y, xlim = c(-20,20), ylim = c(-20,20))
 
-#p = c(4, 5)
-
-
-for (j in c(1:nrow(p))) {
+## rotation
+for (i in seq(0, 360, 1)) {
   
-  ang = 120
-  
-  R <- c(coss(ang), -sinn(ang), sinn(ang), coss(ang))
-  rmat <- matrix(R, nrow = 2, ncol = 2, byrow = TRUE)
-  
-  t <- as.matrix(p[j,])
-  pr <- rmat %*% as.vector(t)
-  
-  # pr1 <- (x * cos(j)) - (y * sin(j))
-  # pr2 <- (x * sin(j)) + (y * cos(j))
-  # 
-  # pr <- c(pr1, pr2)
-  # 
-  if (j == 1) {
+    ang = i
+    
+    R <- c(coss(ang), -sinn(ang), sinn(ang), coss(ang))
+    rmat <- matrix(R, nrow = 2, ncol = 2, byrow = TRUE)
+    
+    pp = as.matrix(t(p))
+    
+    w = rmat %*% pp
+    
+    new_points <- t(w)
+    points(new_points, col = 3)
+ 
+    png(paste0('~/Documents/data/plots/rot_', i,'.png'))
     plot(p$x, p$y, xlim = c(-20,20), ylim = c(-20,20))
-  }
-    points(pr[1], pr[2], col = 5)
+    points(new_points, col = 3)
+    dev.off()
 }
 
+
+## 3D rotation
+
+# generate dataset
+rows = 2000
+p = data.frame(matrix(nrow = rows, ncol = 0))
+p$x = rnorm(rows, 0, 1)
+p$y = rnorm(rows, 0, 6)
+p$z = rnorm(rows, 0, 4)
+
+scatterplot3d(p$x, p$y, p$z, xlim = c(-20,20), ylim = c(-20,20), zlim = c(-20, 20))
+
+
+# to get plane parallel to an axis need to rotate 45 degrees around one axis
+ang = 90
+
+# rotation around the y axis
+R <- c(coss(ang), 0, sinn(ang),
+       0, 1, 0,
+       -sinn(ang), 0, coss(ang))
+rmat <- matrix(R, nrow = 3, ncol = 3, byrow = TRUE)
+
+pp = as.matrix(t(p))
+
+w = rmat %*% pp
+
+new_points <- as.data.frame(t(w))
+colnames(new_points) <- c('x', 'y', 'z')
+scatterplot3d(new_points$x, new_points$y, new_points$z, xlim = c(-20,20), ylim = c(-20,20), zlim = c(-20, 20))
+
 # 
+# #p = c(4, 5)
+# 
+#     for (j in c(1:nrow(p))) {
+#       
+#       ang = 33.3
+#       
+#       R <- c(coss(ang), -sinn(ang), sinn(ang), coss(ang))
+#       rmat <- matrix(R, nrow = 2, ncol = 2, byrow = TRUE)
+#       
+#       t <- as.matrix(p[j,])
+#       pr <- rmat %*% as.vector(t)
+#       
+#       # pr1 <- (x * cos(j)) - (y * sin(j))
+#       # pr2 <- (x * sin(j)) + (y * cos(j))
+#       # 
+#       # pr <- c(pr1, pr2)
+#       # 
+#       if (j == 1) {
+#         plot(p$x, p$y, xlim = c(-20,20), ylim = c(-20,20))
+#       }
+#         points(pr[1], pr[2], col = 3)
+#         
+#     }
+# 
+#   
+# # 
 # for (j in seq(1, 360, 1)) {
 #   
 #   ang = j
