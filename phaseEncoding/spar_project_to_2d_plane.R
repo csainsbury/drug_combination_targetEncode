@@ -152,20 +152,26 @@ for (i in seq(0, 360, 1)) {
 # generate dataset
 rows = 2000
 p = data.frame(matrix(nrow = rows, ncol = 0))
-p$x = rnorm(rows, 0, 1)
-p$y = rnorm(rows, 0, 6)
-p$z = rnorm(rows, 0, 4)
+p$x = rnorm(rows, 0, 2)
+p$y = rnorm(rows, 0, 3)
+p$z = rnorm(rows, 0, 10)
 
-scatterplot3d(p$x, p$y, p$z, xlim = c(-20,20), ylim = c(-20,20), zlim = c(-20, 20))
+p <- plane_projection
 
+plot_limit <- 1.5
+
+scatterplot3d(p$x, p$y, p$z,
+              xlim = c(-plot_limit,plot_limit), ylim = c(-plot_limit,plot_limit), zlim = c(-plot_limit, plot_limit)
+              )
 
 # to get plane parallel to an axis need to rotate 45 degrees around one axis
-ang = 90
+p <- plane_projection
+ang = 45
 
-# rotation around the y axis
-R <- c(coss(ang), 0, sinn(ang),
-       0, 1, 0,
-       -sinn(ang), 0, coss(ang))
+# rotation around the z axis
+R <- c(coss(ang), -sinn(ang), 0,
+       sinn(ang), coss(ang), 0,
+       0, 0, 1)
 rmat <- matrix(R, nrow = 3, ncol = 3, byrow = TRUE)
 
 pp = as.matrix(t(p))
@@ -173,8 +179,27 @@ pp = as.matrix(t(p))
 w = rmat %*% pp
 
 new_points <- as.data.frame(t(w))
+
+    # rotation around the x axis
+    R <- c(1, 0, 0,
+           0, coss(ang), -sinn(ang),
+           0, sinn(ang), coss(ang))
+    rmat <- matrix(R, nrow = 3, ncol = 3, byrow = TRUE)
+    
+    pp = as.matrix(t(new_points))
+    
+    w = rmat %*% pp
+    
+    new_points <- as.data.frame(t(w))
+
+
+
 colnames(new_points) <- c('x', 'y', 'z')
-scatterplot3d(new_points$x, new_points$y, new_points$z, xlim = c(-20,20), ylim = c(-20,20), zlim = c(-20, 20))
+scatterplot3d(new_points$x, new_points$y, new_points$z,
+              xlim = c(-plot_limit,plot_limit), ylim = c(-plot_limit,plot_limit), zlim = c(-plot_limit, plot_limit)
+              )
+
+plot3d(new_points)
 
 # 
 # #p = c(4, 5)
