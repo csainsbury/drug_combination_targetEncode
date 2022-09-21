@@ -3,33 +3,49 @@ library(rgl)
 library(mosaic)
 library(scatterplot3d)
 
-s <- seq(1, 100, 0.01)
+s <- seq(1, 200, 0.01)
 s = sqrt(s^3)
-s <- sin(s)
+s <- tan(sin(s))
 plot(s)
 
-start_point <- 1
-offset <- 33
+for (i in seq(1, 100, 1)) {
+  print(i)
+  start_point <- 1
+  offset <- i
+  
+  initial_point <- start_point + (2 * offset)
+  end_padding <- length(s) - initial_point
+  
+  x <- s[start_point:end_padding]
+  y <- s[(start_point + offset):(end_padding+offset)]
+  z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
+  
+  # plot(x, y, cex = 0.2)
+  # ## dot product a.b = a %*%
+  # 
+  # a = c(2, 3, 4)
+  # b = c(5, 6, 7)
+  # 
+  # c = a %*% b
+  # 
+  # library(rgl)
+  #
+  if (i == 33) {plot3d(x,y,z)}
+  
+  # from paper
+  u <- 1/3 * (x + y + z)
+  v <- (1/sqrt(6)) * (x + y - (2 * z))
+  w <- (1/sqrt(2)) * (x - y)
+  
+  df <- data.frame(u, v, w)
+  
+  png(paste0('~/Documents/data/plots/plot_', i, '.png'), width = 8, height = 8, units = 'in', res = 300)
 
-initial_point <- start_point + (2 * offset)
-end_padding <- length(s) - initial_point
-
-x <- s[start_point:end_padding]
-y <- s[(start_point + offset):(end_padding+offset)]
-z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
-
-
-plot(x, y, cex = 0.2)
-## dot product a.b = a %*%
-
-a = c(2, 3, 4)
-b = c(5, 6, 7)
-
-c = a %*% b
-
-library(rgl)
-plot3d(x,y,z)
-
+  ggplot(df, aes(x = v, y = w)) +
+    stat_density2d(aes(fill = ..density..), contour = F, geom = 'tile')
+  dev.off()
+  
+}
 
 ##
 # steps to generate orthogonal projection onto plane:
@@ -68,11 +84,15 @@ cross_prod <- function(a, b) {
   
 }
 
+rad2deg <- function(rad) {(rad * 180) / (pi)}
+deg2rad <- function(deg) {(deg * pi) / (180)}
+
 M = normal_vector # normal to current plane
 M = c(1,1,1)
 N = c(0, 0, 1) # normal to the plane to rotate into
 
 costheta <-dot(M, N) / (norm(matrix(M))*norm(matrix(N)))
+costheta <- deg2rad(costheta)
 
 axis <- cross_prod(M, N) / norm(matrix(cross_prod(M, N)))
 
@@ -89,7 +109,7 @@ for (j in c(1:nrow(plane_projection))) {
   z = plane_projection$z[j]
   
   matrix_components <- c(x*x*C+c, x*y*C-z*s, x*z*C+y*s, y*x*C+z*s,  y*y*C+c, y*z*C-x*s, z*x*C-y*s,  z*y*C+x*s,  z*z*C+c)
-  rmat <- matrix(matrix_components, nrow = 3, ncol = 3, byrow = TRUE)
+  rmat <- matrix(matrix_components, nrow = 3, ncol = 3, byrow = T)
   
   v <- c(x,y,z)
   
@@ -166,7 +186,7 @@ scatterplot3d(p$x, p$y, p$z,
 
 # to get plane parallel to an axis need to rotate 45 degrees around one axis
 p <- plane_projection
-ang = 45
+ang = 53.4
 
 # rotation around the z axis
 R <- c(coss(ang), -sinn(ang), 0,
@@ -200,6 +220,7 @@ scatterplot3d(new_points$x, new_points$y, new_points$z,
               )
 
 plot3d(new_points)
+plot3d(plane_projection)
 
 # 
 # #p = c(4, 5)

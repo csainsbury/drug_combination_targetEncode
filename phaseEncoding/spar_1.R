@@ -3,7 +3,7 @@ library(rgl)
 
 
 s <- seq(1, 100, 0.01)
-s = s
+s = sqrt(s^3)
 s <- sin(s)
 plot(s)
 
@@ -37,11 +37,10 @@ colnames(s) <- c('t', 'mv')
 s = s[2:nrow(s), ]
 
 
-s <- read.csv('~/projects11/3d2d/export_1.csv')
+s <- read.csv('~/Documents/data/phaseEncodingData/export_1.csv')
 #s <- read.csv('~/projects11/3d2d/gluej_1.csv')
 #s <- read.csv('~/projects11/3d2d/gluek.csv')
 s <- s[, 2][1:1000]
-
 # for (j in c(1:length(s))) {
 #   
 #   if (s[j] < 4) {
@@ -66,6 +65,7 @@ x <- s[start_point:end_padding]
 y <- s[(start_point + offset):(end_padding+offset)]
 z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
 
+scatterplot3d(x,y,z)
 
 plot3d(x,y,z,
        type = 'p',
@@ -112,4 +112,27 @@ plot3d(x,y,z,
        size=5,
        decorate = F
 )
+
+##
+
+for (i in c(0:1000)) {
+  
+  Xc <- 1000
+  Yc <- 1000
+  Zc <- 1000
+  
+  X = x
+  Y = y
+  Z = z
+  
+  F = 50
+  
+  x_dev <- ((X - Xc) * (F/Z)) + Xc
+  y_dev <-  ((Y - Yc) * (F/Z)) + Yc
+  
+  png(paste0('./Documents/data/plots/camera_', i,'.png' ))
+  plot(x_dev, y_dev, main = i)
+  dev.off()
+  
+}
 
