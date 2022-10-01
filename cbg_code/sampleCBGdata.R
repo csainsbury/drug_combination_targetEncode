@@ -1,4 +1,6 @@
 # prep sample of CBG inpatient data for testing
+## from aegisPOC
+
 library(data.table)
 library(tidyverse)
 
@@ -10,7 +12,7 @@ subset <- x %>% select(V148, V150, V101, V104, V140)
 colnames(subset) <- c('CHI', 'location', 'dateTime', 'Glu', 'op')
 subset$CHI <- as.numeric(subset$CHI)
 subset$Glu <- ifelse(subset$Glu == '<1.1', 1, subset$Glu)
-subset$Glu <- ifelse(subset$Glu == '>27.8', 1, subset$Glu)
+subset$Glu <- ifelse(subset$Glu == '>27.8', 27.9, subset$Glu)
 subset$dateTime <- as.POSIXct(subset$dateTime, format = "%d/%m/%Y %H:%M")
 
 # remove inappropriate locations
@@ -86,7 +88,7 @@ colnames(cf) <- c('V1', 'N', 'uID', 'location', 'dateTime', 'Glu', 'op', 'unix_d
 # label admissions within cf
 cf[, 'admission_vec' := admission_N_vector(unix_dateTime, lockout), by=.(V1)]
 
-cf[, 'use_flag' := n_days_select(dateTime, cohort_selection_threshold, interval_days), by =.(V1, admission_vec)]
+cf[, 'use_flag' := n_days_select(dateTime, cohort_selection_threshold, interval_days, V1, admission_vec), by =.(V1, admission_vec)]
 
 use_cohort <- cf[use_flag == 1]
 

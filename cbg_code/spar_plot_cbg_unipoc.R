@@ -7,21 +7,26 @@ library(padr)
 library(zoo)
 library(viridis)
 
-x <- fread('~/Documents/data/CBGdata/time_series_cohort_10days.csv')
-x[, 'N' := .N, by=.(V1)]
+x <- fread('~/Documents/data/CBGdata/unipoc_time_series_cohort_10days.csv')
+x <- x[order(x$uID, x$admission_vec)]
+
+#library(dplyr)
+# add unique ID by 2 cols - uID and admission vec
+x <- x %>% mutate(ID = group_indices(x, .dots=c("uID", "admission_vec"))) 
+# x[, 'N' := .N, by=.(uID)]
 
 # split out last day and label
 #t <- x[V1 == 203446038]
 x$day <- as.Date(x$dateTime)
-x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(V1)]
-x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) < 6, 1, 0), by=.(V1)]
+x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(ID)]
+x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) < 6, 1, 0), by=.(ID)]
 # remove the last day from the training set
 x <- x[flag_last_day == 0]
 
-x[, 'N' := .N, by=.(V1)]
-x <- x[N>=20]
+x[, 'N' := .N, by=.(ID)]
+x <- x[N>=12]
 
-x[, 'n' := c(1 : .N), by=.(V1)]
+x[, 'n' := c(1 : .N), by=.(ID)]
 print(sum(x[n==1]$label))
 print(nrow(x[n==1]))
 
@@ -38,16 +43,16 @@ returnFirstDayTime <- function(sub) {
   first_point_time <- paste0(first_day, ' 0:00:01')
   first_point_time <- as.POSIXct(first_point_time, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')
   
-  sub <- data.frame(sub$V1, sub$dateTime, sub$Glu, sub$location, sub$op)
-  colnames(sub) <- c('V1', 'dateTime', 'Glu', 'location', 'op')
+  sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
+  colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
   
-  insert_top <- as.data.frame(matrix(nrow = 1, ncol = 5))
-  colnames(insert_top) <- c('V1', 'dateTime', 'Glu', 'location', 'op')
-  insert_top$V1 <- sub$V1[1]
+  insert_top <- as.data.frame(matrix(nrow = 1, ncol = 4))
+  colnames(insert_top) <- c('ID', 'dateTime', 'Glu', 'loc')
+  insert_top$ID <- sub$ID[1]
   insert_top$dateTime <- first_point_time
   insert_top$Glu <- first_val
   insert_top$location <- sub$location[1]
-  insert_top$op <- sub$op[1]
+  #insert_top$op <- sub$op[1]
   
   return(insert_top)
   
@@ -60,16 +65,16 @@ returnLastDayTime <- function(sub) {
   last_point_time <- paste0(last_day, ' 23:59:59')
   last_point_time <- as.POSIXct(last_point_time, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')
   
-  sub <- data.frame(sub$V1, sub$dateTime, sub$Glu, sub$location, sub$op)
-  colnames(sub) <- c('V1', 'dateTime', 'Glu', 'location', 'op')
+  sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
+  colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
   
-  insert_end <- as.data.frame(matrix(nrow = 1, ncol = 5))
-  colnames(insert_end) <- c('V1', 'dateTime', 'Glu', 'location', 'op')
-  insert_end$V1 <- sub$V1[1]
+  insert_end <- as.data.frame(matrix(nrow = 1, ncol = 4))
+  colnames(insert_end) <- c('ID', 'dateTime', 'Glu', 'loc')
+  insert_end$ID <- sub$ID[1]
   insert_end$dateTime <- last_point_time
   insert_end$Glu <- last_val
   insert_end$location <- sub$location[nrow(sub)]
-  insert_end$op <- sub$op[nrow(sub)]
+  #insert_end$op <- sub$op[nrow(sub)]
   
   return(insert_end)
   
@@ -105,7 +110,7 @@ densityMap <- function(v1, s, i, b, label) {
     pixel_n = 200
     
     if (label == 1) {
-      jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 1000, height = 1000, units = 'px')
+      jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
       p <- ggplot(df, aes(x = v, y = w)) +
         stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
         scale_fill_viridis()
@@ -113,7 +118,7 @@ densityMap <- function(v1, s, i, b, label) {
       print(p)
       dev.off()
     } else {
-      jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 1000, height = 1000, units = 'px')
+      jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
       p <- ggplot(df, aes(x = v, y = w)) +
         stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
         scale_fill_viridis()
@@ -124,19 +129,22 @@ densityMap <- function(v1, s, i, b, label) {
     
 }
 
-idVec <- unique(x$V1)
+idVec <- unique(x$ID)
+print(length(idVec))
 for (j in c(1:length(idVec))) {
 #for (j in c(1:100)) {
   
+  if (j%%100 == 0) {print(j)}
+  
   id <- idVec[j]
-  sub <- x[V1 == id]
+  sub <- x[ID == id]
   label <- sub$label[1]
   
   insert_top <- returnFirstDayTime(sub)
   insert_end <- returnLastDayTime(sub)
   
-  sub <- data.frame(sub$V1, sub$dateTime, sub$Glu, sub$location, sub$op)
-  colnames(sub) <- c('V1', 'dateTime', 'Glu', 'location', 'op')
+  sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
+  colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
     
   out <- rbind(insert_top, sub, insert_end)
   out <- out %>% thicken("1 min") %>% select(-dateTime) %>% pad()
@@ -146,7 +154,7 @@ for (j in c(1:length(idVec))) {
   #out <- fill(out, c(V1, Glu, location, op))
   
   # pass to density map function
-  densityMap(out$V1[1], jitter(out$Glu), 480, 100, label)
+  densityMap(out$ID[1], jitter(out$Glu), 480, 100, label)
   
   }
   

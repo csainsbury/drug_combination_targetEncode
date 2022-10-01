@@ -402,7 +402,12 @@ normalisedControlGradient <- function(input_1, input_2, timeBins, metric, type, 
 ## new functions
 
 # select random 10 period from each admission
-n_days_select <- function(dateTime, min_threshold, interval_days) {
+n_days_select <- function(dateTime, min_threshold, interval_seconds, uID, admission_vec) {
+  
+  print(uID)
+  print(admission_vec)
+  
+  interval_days = interval_seconds / (60*60*24)
   
   window_flag <- rep(0, length(dateTime))
   
