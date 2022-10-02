@@ -129,55 +129,6 @@ densityMap <- function(v1, s, i, b, label) {
     
 }
 
-densityMap_hexagons <- function(v1, s, i, b, label) {
-  
-  #v1 = sub$ID[1]; s = out$Glu; i = 1000
-  s <- log(s)
-  
-  start_point <- 1
-  offset <- i
-  
-  initial_point <- start_point + (2 * offset)
-  end_padding <- length(s) - initial_point
-  
-  x <- s[start_point:end_padding]
-  y <- s[(start_point + offset):(end_padding+offset)]
-  z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
-  
-  # from paper 2D projection 
-  u <- 1/3 * (x + y + z)
-  v <- (1/sqrt(6)) * (x + y - (2 * z))
-  w <- (1/sqrt(2)) * (x - y)
-  
-  range01 <- function(x){(x-min(x))/(max(x)-min(x))}
-  
-  v <- range01(v)
-  w <- range01(w)
-  
-  df <- data.frame(v, w)
-  
-  pixel_n = 200
-  
-  if (label == 1) {
-    jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-    p <- ggplot(df, aes(x = v, y = w)) +
-      stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-      scale_fill_viridis()
-    p <- p + theme_void() + theme(legend.position = "none")
-    print(p)
-    dev.off()
-  } else {
-    jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-    p <- ggplot(df, aes(x = v, y = w)) +
-      stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-      scale_fill_viridis()
-    p <- p + theme_void() + theme(legend.position = "none")
-    print(p)
-    dev.off()
-  }
-  
-}
-
 idVec <- unique(x$ID)
 print(length(idVec))
 for (j in c(1:length(idVec))) {
