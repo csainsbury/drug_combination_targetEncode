@@ -7,7 +7,7 @@ library(padr)
 library(zoo)
 library(viridis)
 
-x <- fread('~/Documents/data/CBGdata/unipoc_time_series_cohort_10days.csv')
+x <- fread('~/Documents/data/libre_data/export_1.csv')
 x <- x[order(x$uID, x$admission_vec)]
 
 #library(dplyr)
@@ -107,7 +107,7 @@ densityMap <- function(v1, s, i, b, label) {
     
     df <- data.frame(v, w)
     
-    pixel_n = 200
+    pixel_n = 800
     
     if (label == 1) {
       jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')

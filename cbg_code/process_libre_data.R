@@ -6,10 +6,13 @@ file_list <- list.files(paste0(path))
 
 returnFirstDayTime <- function(sub) {
   
+  sub$Glu[is.na(sub$Glu)] <- 0
+  sub <- sub[Glu>0]
+  
   first_day <- substr(sub$dateTime[1], 1, 10)
   first_val <- sub$Glu[1]
   
-  first_point_time <- paste0(first_day, ' 0:01')
+  first_point_time <- paste0(first_day, ' 0:00')
   first_point_time <- as.POSIXct(first_point_time, format = "%Y-%m-%d %H:%M", tz = 'UTC')
   
   sub <- data.frame(sub$dateTime, sub$Glu)
@@ -25,11 +28,14 @@ returnFirstDayTime <- function(sub) {
 }
 
 returnLastDayTime <- function(sub) {
+  
+  sub$Glu[is.na(sub$Glu)] <- 0
+  sub <- sub[Glu>0]
 
   last_day <- substr(sub$dateTime[nrow(sub)], 1, 10)
   last_val <- sub$Glu[nrow(sub)]
   
-  last_point_time <- paste0(last_day, ' 23:59')
+  last_point_time <- paste0(last_day, ' 23:45')
   last_point_time <- as.POSIXct(last_point_time, format = "%Y-%m-%d %H:%M", tz = 'UTC')
   
   sub <- data.frame(sub$dateTime, sub$Glu)
@@ -52,9 +58,24 @@ for (i in c(1:length(file_list))) {
   x <- data.table('dateTime' = x$dateTime,
                   'Glu' = x$`Historic Glucose mmol/L`)
   
+  x <- x[order(x$dateTime), ]
+  
   insert_top <- returnFirstDayTime(x)
   insert_end <- returnLastDayTime(x)
   
   x <- rbind(insert_top, x, insert_end)
+  x <- data.table(x)
+  
+  x$dateTime <- as.POSIXct(x$dateTime, format = "%d-%m-%Y %H:%M")
+  
+  
+  x$Glu[is.na(x$Glu)] <- 0
+  x <- x[Glu>0]
+  
+  x <- x %>% thicken("15 min") %>% select(-dateTime) %>% pad()
+  x$Glu <- na.approx(x$Glu)
+  
+  x$Glu[is.na(x$Glu)] <- 0
+  x[Glu>0]
   
 }

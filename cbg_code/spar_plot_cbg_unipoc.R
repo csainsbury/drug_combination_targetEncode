@@ -7,7 +7,7 @@ library(padr)
 library(zoo)
 library(viridis)
 
-x <- fread('~/Documents/data/CBGdata/unipoc_time_series_cohort_10days.csv')
+x <- fread('~/Documents/data/CBGdata/unipoc_time_series_cohort_5days.csv')
 x <- x[order(x$uID, x$admission_vec)]
 
 #library(dplyr)
@@ -19,12 +19,12 @@ x <- x %>% mutate(ID = group_indices(x, .dots=c("uID", "admission_vec")))
 #t <- x[V1 == 203446038]
 x$day <- as.Date(x$dateTime)
 x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(ID)]
-x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) < 5, 1, 0), by=.(ID)]
+x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) < 4, 1, 0), by=.(ID)]
 # remove the last day from the training set
 x <- x[flag_last_day == 0]
 
 x[, 'N' := .N, by=.(ID)]
-x <- x[N>=20]
+x <- x[N>=6]
 
 x[, 'n' := c(1 : .N), by=.(ID)]
 print(sum(x[n==1]$label))
@@ -83,7 +83,7 @@ returnLastDayTime <- function(sub) {
 densityMap <- function(v1, s, i, b, label) {
   
   #v1 = sub$ID[1]; s = out$Glu; i = 1000
-  s <- log(s)
+  s <- diff(s)
   
   start_point <- 1
   offset <- i
@@ -100,10 +100,10 @@ densityMap <- function(v1, s, i, b, label) {
     v <- (1/sqrt(6)) * (x + y - (2 * z))
     w <- (1/sqrt(2)) * (x - y)
     
-    range01 <- function(x){(x-min(x))/(max(x)-min(x))}
-    
-    v <- range01(v)
-    w <- range01(w)
+    # range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+    # 
+    # v <- range01(v)
+    # w <- range01(w)
     
     df <- data.frame(v, w)
     
@@ -129,10 +129,10 @@ densityMap <- function(v1, s, i, b, label) {
     
 }
 
-densityMap_hexagons <- function(v1, s, i, b, label) {
+densityMap_diff <- function(v1, s, i, b, label) {
   
-  #v1 = sub$ID[1]; s = out$Glu; i = 1000
-  s <- log(s)
+  #v1 = sub$ID[1]; s = out$Glu; i = 480
+  s <- diff(s)
   
   start_point <- 1
   offset <- i
@@ -144,35 +144,44 @@ densityMap_hexagons <- function(v1, s, i, b, label) {
   y <- s[(start_point + offset):(end_padding+offset)]
   z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
   
+  # library(rgl); plot3d(x,y,z)
+  
   # from paper 2D projection 
   u <- 1/3 * (x + y + z)
   v <- (1/sqrt(6)) * (x + y - (2 * z))
   w <- (1/sqrt(2)) * (x - y)
   
-  range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+  # plot(v, w, cex = 0.4, pch=16)
   
-  v <- range01(v)
-  w <- range01(w)
+  # range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+  # 
+  # v <- range01(v)
+  # w <- range01(w)
   
   df <- data.frame(v, w)
   
-  pixel_n = 200
+  # pixel_n = 200
+  
+  pl_min = -0.1
+  pl_max = 0.1
   
   if (label == 1) {
     jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-    p <- ggplot(df, aes(x = v, y = w)) +
-      stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-      scale_fill_viridis()
-    p <- p + theme_void() + theme(legend.position = "none")
-    print(p)
+    
+    m <- ggplot(df, aes(x = v, y = w)) +
+      geom_point() + theme_void()
+    m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
+    print(m)
+    
     dev.off()
   } else {
     jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-    p <- ggplot(df, aes(x = v, y = w)) +
-      stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-      scale_fill_viridis()
-    p <- p + theme_void() + theme(legend.position = "none")
-    print(p)
+    
+    m <- ggplot(df, aes(x = v, y = w)) +
+      geom_point() + theme_void()
+    m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
+    print(m)
+    
     dev.off()
   }
   
@@ -203,7 +212,7 @@ for (j in c(1:length(idVec))) {
   #out <- fill(out, c(V1, Glu, location, op))
   
   # pass to density map function
-  densityMap(out$ID[1], jitter(out$Glu), 480, 100, label)
+  densityMap_diff(out$ID[1], jitter(out$Glu), 480, 100, label)
   
   }
   
