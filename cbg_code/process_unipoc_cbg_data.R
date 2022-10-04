@@ -79,7 +79,7 @@ single_m <- single_m[order(-single_m$interval_days), ]
 # minimum number of admission duration days for study cohort
 # will equal train + test period
 
-cohort_selection_threshold <- 10
+cohort_selection_threshold <- 5
 
 plot(single_m$interval_days, cex = 0); lines(single_m$interval_days, lwd = 3)
 abline(h = cohort_selection_threshold, col = 'red')
