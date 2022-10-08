@@ -6,8 +6,11 @@ library(timetk)
 library(padr)
 library(zoo)
 library(viridis)
+library(imputeTS)
 
-x <- fread('~/Documents/data/CBGdata/unipoc_time_series_cohort_10days.csv')
+# 101355572
+
+x <- fread('~/Documents/data/CBGdata/huge_unipoc_time_series_cohort_first_10_days.csv')
 x <- x[order(x$uID, x$admission_vec)]
 
 #library(dplyr)
@@ -19,20 +22,34 @@ x <- x %>% mutate(ID = group_indices(x, .dots=c("uID", "admission_vec")))
 #t <- x[V1 == 203446038]
 x$day <- as.Date(x$dateTime)
 x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(ID)]
-x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) < 4, 1, 0), by=.(ID)]
+x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) <= 3, 1, 0), by=.(ID)]
 # remove the last day from the training set
 x <- x[flag_last_day == 0]
 
 x[, 'N' := .N, by=.(ID)]
-x <- x[N>=40]
+x <- x[N>=10]
 
 x[, 'n' := c(1 : .N), by=.(ID)]
 print(sum(x[n==1]$label))
 print(nrow(x[n==1]))
 
-plot(x$dateTime, x$Glu, pch = 16, cex = 0.6, col = ifelse(x$label == 0,
-                                                          rgb(0,0,0,0.4, maxColorValue = 1),
-                                                          rgb(1,0,0,0.4, maxColorValue = 1)))
+# plot(x$dateTime, x$Glu, pch = 16, cex = 0.6, col = ifelse(x$label == 0,
+#                                                           rgb(0,0,0,0.4, maxColorValue = 1),
+#                                                           rgb(1,0,0,0.4, maxColorValue = 1)))
+
+# produce fixed ratio of case to no case
+ratio = 3
+event_ids <- unique(x[label==1]$ID)
+no_event_ids <- unique(x[label==0]$ID)
+id_sample <- no_event_ids[sample(length(no_event_ids), round(length(event_ids) * ratio), 0)]
+
+neg <- x[ID %in% id_sample]
+pos <- x[ID %in% event_ids]
+
+x <- rbind(neg, pos)
+
+print(sum(x[n==1]$label))
+print(nrow(x[n==1]))
 
 # create value at 0000 first day (same as first value), and 23.59 (same as last recorded value) on the last day to allow minute fills of data
 
@@ -199,7 +216,7 @@ densityMap_diff_plus <- function(v1, s, i, b, label, limit_min, limit_max) {
   
   sd <- c(0, diff(s))
   
-  s <- sd
+  s <- s * sd
   
   start_point <- 1
   offset <- i
@@ -220,57 +237,38 @@ densityMap_diff_plus <- function(v1, s, i, b, label, limit_min, limit_max) {
   
   # plot(v, w, cex = 0.4, pch=16)
   
-  # range01 <- function(x){(x-min(x))/(max(x)-min(x))}
-  # 
-  # v <- range01(v)
-  # w <- range01(w)
+  range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+
+  v <- range01(v)
+  w <- range01(w)
   
   df <- data.frame(v, w)
   
-  # pixel_n = 200
+  pixel_n = 200
   
   pl_min = limit_min
   pl_max = limit_max
   
   if (label == 1) {
     jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-    
+
     m <- ggplot(df, aes(x = v, y = w)) +
       geom_point() + theme_void()
     m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
     print(m)
-    
+
     dev.off()
   } else {
     jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-    
+
     m <- ggplot(df, aes(x = v, y = w)) +
       geom_point() + theme_void()
     m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
     print(m)
-    
+
     dev.off()
   }
-  
-      # if (label == 1) {
-      #   # jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-      #   
-      #   m <- ggplot(df, aes(x = v, y = w)) +
-      #     geom_point() + theme_void()
-      #   m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
-      #   print(m)
-      #   
-      #   # dev.off()
-      # } else {
-      #   # jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-      #   
-      #   m <- ggplot(df, aes(x = v, y = w)) +
-      #     geom_point() + theme_void()
-      #   m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
-      #   print(m)
-      #   
-      #   # dev.off()
-      # }
+
   
 }
 
@@ -294,13 +292,14 @@ for (j in c(1:length(idVec))) {
   out <- rbind(insert_top, sub, insert_end)
   out <- out %>% thicken("1 min") %>% select(-dateTime) %>% pad()
   
+  # out$Glu <- imputeTS::na_locf(out$Glu)
   out$Glu <- na.spline(out$Glu)
   
   #out <- fill(out, c(V1, Glu, location, op))
   
   # pass to density map function
   # densityMap_diff(out$ID[1], jitter(out$Glu), 480, 100, label)
-  densityMap_diff_plus(out$ID[1], jitter(out$Glu), 480, 100, label, -2, 2)
+  densityMap_diff_plus(out$ID[1], jitter(out$Glu), 240, 100, label, 0, 1)
   
   }
   

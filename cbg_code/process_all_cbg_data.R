@@ -1,34 +1,35 @@
-# process unipoc data for spar plotting
+## process multiple cbg files into single file
 
 library(data.table)
 library(tidyverse)
 
 source('~/Documents/code/cbg_code/cbg_functions.R')
 
-x1 <- fread('~/Documents/data/CBGdata/queh_010122-010522.csv', header = T,fill = T)
-x2 <- fread('~/Documents/data/CBGdata/queh_010521-010122.csv', header = T, fill = T)
-x3 <- fread('~/Documents/data/CBGdata/CBG_GRI_sep19_jan20.csv', header = T, fill = T)
-x4 <- fread('~/Documents/data/CBGdata/CBG_GRI_sep19_jan19.csv', header = T, fill = T)
-x5 <- fread('~/Documents/data/CBGdata/CBG_GRI_may19_sep19.csv', header = T, fill = T)
-x6 <- fread('~/Documents/data/CBGdata/CBG_GRI_jan19_may19.csv', header = T, fill = T)
-x7 <- fread('~/Documents/data/CBGdata/CBG_GRI_apr18_sep18.csv', header = T, fill = T)
+path = '~/Documents/data/CBGdata/cbg_repo/'
+files = list.files(path)
 
-x8 <- fread('~/Documents/data/CBGdata/CBG_SG_dec18_jan19.csv', header = T, fill = T)
-x9 <- fread('~/Documents/data/CBGdata/CBG_SG_feb_mar19.csv', header = T, fill = T)
-x10 <- fread('~/Documents/data/CBGdata/CBG_SG_jan_feb18.csv', header = T, fill = T)
-x11 <- fread('~/Documents/data/CBGdata/CBG_SG_mar_apr18.csv', header = T, fill = T)
-x12 <- fread('~/Documents/data/CBGdata/CBG_SG_may_jun18.csv', header = T, fill = T)
-x13 <- fread('~/Documents/data/CBGdata/CBG_SG_oct_nov18.csv', header = T, fill = T)
+for (i in c(1:length(files))) {
+  
+  print(paste0(length(files), ' files: n = ', i))
+  print(files[i])
+  
+  x <- fread(paste0(path, files[i]), fill = TRUE)
+  
+  x <- x[`Result Type` == "Patient"]
+  
+  s <- data.table('uID' = x$`Patient ID`,
+                  'datetime' = x$`Test Date/Time`,
+                  'Glu' = x$GLU,
+                  'loc' = x$Location)
+  
+  if (i == 1) {
+    xe <- s
+  } else {
+    xe <- rbind(xe, s)
+  }
+}
 
-
-x <- rbind(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13)
-
-x <- x[`Result Type` == "Patient"]
-
-s <- data.table('uID' = x$`Patient ID`,
-                     'datetime' = x$`Test Date/Time`,
-                     'Glu' = x$GLU,
-                     'loc' = x$Location)
+s <- xe
 
 s$uID <- as.numeric(s$uID)
 s$uID[is.na(s$uID)] <- 0
@@ -70,6 +71,8 @@ s <- unique(s)
 
 # identify each admission using 7 day lockout period
 # number of admissions (unix date time required):
+for (k in c(2,3,5,6,7,8,9)) {
+  
 m <- s
 m <- m[order(m$uID, m$dateTime), ]
 
@@ -92,10 +95,11 @@ single_m <- single_m[order(-single_m$interval_days), ]
 
 # minimum number of admission duration days for study cohort
 # will equal train + test period
+  
+cohort_selection_threshold <- k
 
-cohort_selection_threshold <- 5
-
-plot(single_m$interval_days, cex = 0); lines(single_m$interval_days, lwd = 3)
+plot(single_m$interval_days, cex = 0,main = paste0('admission duration: ', j, ' days'))
+lines(single_m$interval_days, lwd = 3)
 abline(h = cohort_selection_threshold, col = 'red')
 
 last_id <- which(single_m$interval_days == cohort_selection_threshold)[length(which(single_m$interval_days == cohort_selection_threshold))]
@@ -124,8 +128,9 @@ export_concat <- cf[1,]
 export_concat <- export_concat[-1,]
 for (j in c(1:length(u_IDs))) {
   
-  # if (j %% 1000 == 0) {print(j)}
-  print(length(u_IDs)); print(j)
+  if (j %% 1000 == 0) {
+  print(paste0('total: ', length(u_IDs), ' | done: ',print(j)))
+  }
   
   sub = cf[uID == u_IDs[j]]
   
@@ -139,27 +144,27 @@ for (j in c(1:length(u_IDs))) {
     
     dateList <- as.Date(subsub$dateTime)
     
-  #   if (duration > cohort_selection_threshold) {
-  #     
-  #     dateList <- as.Date(subsub$dateTime)
-  #       last_start_date <- max(dateList) - cohort_selection_threshold
-  #         available_dates <- dateList[which(dateList <= last_start_date)]
-  #         random_available_date <- available_dates[sample(length(available_dates), 1)]
-  #         
-  #         start_window <- random_available_date
-  #         end_window <- random_available_date + cohort_selection_threshold
-  #         
-  #         export <- subsub[as.Date(dateTime) >= start_window &
-  #                            as.Date(dateTime) <= end_window]
-  #         
-  #         export_concat <- rbind(export_concat, export)
-  #         
-  #   } else {
-  #     export_concat <- rbind(export_concat, subsub)
-  #   }
-  # }
+    #   if (duration > cohort_selection_threshold) {
+    #     
+    #     dateList <- as.Date(subsub$dateTime)
+    #       last_start_date <- max(dateList) - cohort_selection_threshold
+    #         available_dates <- dateList[which(dateList <= last_start_date)]
+    #         random_available_date <- available_dates[sample(length(available_dates), 1)]
+    #         
+    #         start_window <- random_available_date
+    #         end_window <- random_available_date + cohort_selection_threshold
+    #         
+    #         export <- subsub[as.Date(dateTime) >= start_window &
+    #                            as.Date(dateTime) <= end_window]
+    #         
+    #         export_concat <- rbind(export_concat, export)
+    #         
+    #   } else {
+    #     export_concat <- rbind(export_concat, subsub)
+    #   }
+    # }
     
-    # take first n days only - to avoid epoch effecy
+    # take first n days only - to avoid epoch effect
     start_date <- min(dateList)
     end_date <- start_date + cohort_selection_threshold
     
@@ -174,5 +179,7 @@ for (j in c(1:length(u_IDs))) {
 
 use_cohort <- export_concat
 
-write.table(use_cohort, file = paste0('~/Documents/data/CBGdata/larger2_unipoc_time_series_cohort_first_', cohort_selection_threshold, '_days.csv'), sep = ',', row.names = F)
+write.table(use_cohort, file = paste0('~/Documents/data/CBGdata/huge_unipoc_time_series_cohort_first_', cohort_selection_threshold, '_days.csv'), sep = ',', row.names = F)
+
+}
 
