@@ -10,7 +10,11 @@ library(imputeTS)
 
 # 101355572
 
-x <- fread('~/Documents/data/CBGdata/huge_unipoc_time_series_cohort_first_10_days.csv')
+dataset <- 'huge'
+days_n  <- 10
+minimum_n_cbgs <- 10
+
+x <- fread(paste0('~/Documents/data/CBGdata/', dataset, '_unipoc_time_series_cohort_first_', days_n,'_days.csv'))
 x <- x[order(x$uID, x$admission_vec)]
 
 #library(dplyr)
@@ -18,16 +22,26 @@ x <- x[order(x$uID, x$admission_vec)]
 x <- x %>% mutate(ID = group_indices(x, .dots=c("uID", "admission_vec"))) 
 # x[, 'N' := .N, by=.(uID)]
 
+## here need to truncate all admissions to the right length!!
+x$day <- as.Date(x$dateTime)
+x[, 'correct_duration_days' := ifelse(day <= (min(day) + days_n), 1, 0), by=.(ID)]
+x <- x[correct_duration_days == 1]
+
+# limit to those with minimum n CBGs
+x[, 'N_truncated' := .N, by=.(ID)]
+x <- x[N_truncated >= minimum_n_cbgs]
+
+
 # split out last day and label
 #t <- x[V1 == 203446038]
-x$day <- as.Date(x$dateTime)
+#x$day <- as.Date(x$dateTime)
 x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(ID)]
 x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) <= 3, 1, 0), by=.(ID)]
 # remove the last day from the training set
 x <- x[flag_last_day == 0]
 
-x[, 'N' := .N, by=.(ID)]
-x <- x[N>=10]
+# x[, 'N' := .N, by=.(ID)]
+# x <- x[N>=4]
 
 x[, 'n' := c(1 : .N), by=.(ID)]
 print(sum(x[n==1]$label))
@@ -38,7 +52,7 @@ print(nrow(x[n==1]))
 #                                                           rgb(1,0,0,0.4, maxColorValue = 1)))
 
 # produce fixed ratio of case to no case
-ratio = 3
+ratio = 2
 event_ids <- unique(x[label==1]$ID)
 no_event_ids <- unique(x[label==0]$ID)
 id_sample <- no_event_ids[sample(length(no_event_ids), round(length(event_ids) * ratio), 0)]
@@ -286,11 +300,22 @@ for (j in c(1:length(idVec))) {
   insert_top <- returnFirstDayTime(sub)
   insert_end <- returnLastDayTime(sub)
   
+  # truncate to maximum 30 day duration of data
+  max_day <- as.Date(insert_top$dateTime) + 31
+  sub <- sub[as.Date(sub$dateTime) <= max_day]
+  
   sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
   colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
     
   out <- rbind(insert_top, sub, insert_end)
-  out <- out %>% thicken("1 min") %>% select(-dateTime) %>% pad()
+  
+      # silence warnings for the padding script
+      oldw <- getOption("warn")
+      options(warn = -1)
+      
+        out <- out %>% thicken("1 min") %>% select(-dateTime) %>% pad()
+      
+      on.exit(options(warn = oldw))
   
   # out$Glu <- imputeTS::na_locf(out$Glu)
   out$Glu <- na.spline(out$Glu)

@@ -72,7 +72,7 @@ s <- unique(s)
 # identify each admission using 7 day lockout period
 # number of admissions (unix date time required):
 for (k in c(2,3,5,6,7,8,9)) {
-  
+
 m <- s
 m <- m[order(m$uID, m$dateTime), ]
 
