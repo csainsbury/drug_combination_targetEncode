@@ -34,6 +34,7 @@ s <- xe
 s$uID <- as.numeric(s$uID)
 s$uID[is.na(s$uID)] <- 0
 s <- s[uID > 0]
+s <- s[uID > 100000]
 s <- s[nchar(s$uID) >= 9]
 
 s <- s[uID != 1111111111 &
@@ -98,7 +99,7 @@ single_m <- single_m[order(-single_m$interval_days), ]
   
 cohort_selection_threshold <- k
 
-plot(single_m$interval_days, cex = 0,main = paste0('admission duration: ', j, ' days'))
+plot(single_m$interval_days, cex = 0,main = paste0('admission duration: ', k, ' days'))
 lines(single_m$interval_days, lwd = 3)
 abline(h = cohort_selection_threshold, col = 'red')
 

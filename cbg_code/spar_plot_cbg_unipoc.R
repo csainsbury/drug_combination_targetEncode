@@ -11,11 +11,14 @@ library(imputeTS)
 # 101355572
 
 dataset <- 'huge'
-days_n  <- 10
-minimum_n_cbgs <- 10
+days_n  <- 2
+minimum_n_cbgs <- 4
 
 x <- fread(paste0('~/Documents/data/CBGdata/', dataset, '_unipoc_time_series_cohort_first_', days_n,'_days.csv'))
 x <- x[order(x$uID, x$admission_vec)]
+
+x <- x[-grep("Dialysis", x$loc, ignore.case = TRUE), ]
+x <- x[-grep("Renal", x$loc, ignore.case = TRUE), ]
 
 #library(dplyr)
 # add unique ID by 2 cols - uID and admission vec
@@ -24,13 +27,12 @@ x <- x %>% mutate(ID = group_indices(x, .dots=c("uID", "admission_vec")))
 
 ## here need to truncate all admissions to the right length!!
 x$day <- as.Date(x$dateTime)
-x[, 'correct_duration_days' := ifelse(day <= (min(day) + days_n), 1, 0), by=.(ID)]
+x[, 'correct_duration_days' := ifelse(day <= (min(day) + (days_n - 1)), 1, 0), by=.(ID)]
 x <- x[correct_duration_days == 1]
 
 # limit to those with minimum n CBGs
 x[, 'N_truncated' := .N, by=.(ID)]
 x <- x[N_truncated >= minimum_n_cbgs]
-
 
 # split out last day and label
 #t <- x[V1 == 203446038]
@@ -40,8 +42,8 @@ x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) <= 3, 1, 0), by=.(ID)]
 # remove the last day from the training set
 x <- x[flag_last_day == 0]
 
-# x[, 'N' := .N, by=.(ID)]
-# x <- x[N>=4]
+x[, 'N' := .N, by=.(ID)]
+x <- x[N>1]
 
 x[, 'n' := c(1 : .N), by=.(ID)]
 print(sum(x[n==1]$label))
@@ -144,7 +146,7 @@ densityMap <- function(v1, s, i, b, label) {
       jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
       p <- ggplot(df, aes(x = v, y = w)) +
         stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-        scale_fill_viridis()
+        scale_fill_viridis() + 
       p <- p + theme_void() + theme(legend.position = "none")
       print(p)
       dev.off()
@@ -267,7 +269,7 @@ densityMap_diff_plus <- function(v1, s, i, b, label, limit_min, limit_max) {
     jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
 
     m <- ggplot(df, aes(x = v, y = w)) +
-      geom_point() + theme_void()
+      geom_point(alpha = 4/10) + theme_void()
     m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
     print(m)
 
@@ -276,7 +278,7 @@ densityMap_diff_plus <- function(v1, s, i, b, label, limit_min, limit_max) {
     jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
 
     m <- ggplot(df, aes(x = v, y = w)) +
-      geom_point() + theme_void()
+      geom_point(alpha = 4/10) + theme_void()
     m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
     print(m)
 
@@ -306,6 +308,11 @@ for (j in c(1:length(idVec))) {
   
   sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
   colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
+  
+  # deal with instances where all cbgs the same
+  if (diff(sub$Glu) == 0) {
+    sub$Glu[1] <- jitter(sub$Glu[1])
+  } 
     
   out <- rbind(insert_top, sub, insert_end)
   
@@ -324,7 +331,8 @@ for (j in c(1:length(idVec))) {
   
   # pass to density map function
   # densityMap_diff(out$ID[1], jitter(out$Glu), 480, 100, label)
-  densityMap_diff_plus(out$ID[1], jitter(out$Glu), 240, 100, label, 0, 1)
+  # densityMap_diff_plus(out$ID[1], jitter(out$Glu), 240, 100, label, 0, 1)
+  densityMap_diff_plus(out$ID[1], out$Glu, 240, 100, label, 0, 1)
   
   }
   
