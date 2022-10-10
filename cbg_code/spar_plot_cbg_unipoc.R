@@ -11,14 +11,18 @@ library(imputeTS)
 # 101355572
 
 dataset <- 'huge'
-days_n  <- 2
-minimum_n_cbgs <- 4
+days_n  <- 10
+minimum_n_cbgs <- days_n + 2
 
 x <- fread(paste0('~/Documents/data/CBGdata/', dataset, '_unipoc_time_series_cohort_first_', days_n,'_days.csv'))
 x <- x[order(x$uID, x$admission_vec)]
 
-x <- x[-grep("Dialysis", x$loc, ignore.case = TRUE), ]
-x <- x[-grep("Renal", x$loc, ignore.case = TRUE), ]
+exclude <- c('dialysis', 'renal', 'abbott', 'Ketones', 'X Ray', 'X-ray', 'training', 'staff', 'returned', 'obsolete', 'old', 'Meterx', 'dead', 'BioChemistry', 'weldon', 'radiology', 'outpatient', 'rcas')
+x_ex <- x
+for (e in c(1:length(exclude))) {
+  x_ex <- x_ex[-grep(exclude[e], x_ex$loc, ignore.case = TRUE), ]
+}
+x <- x_ex
 
 #library(dplyr)
 # add unique ID by 2 cols - uID and admission vec
@@ -310,7 +314,7 @@ for (j in c(1:length(idVec))) {
   colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
   
   # deal with instances where all cbgs the same
-  if (diff(sub$Glu) == 0) {
+  if (prod(diff(sub$Glu)) == 0) {
     sub$Glu[1] <- jitter(sub$Glu[1])
   } 
     
@@ -325,14 +329,14 @@ for (j in c(1:length(idVec))) {
       on.exit(options(warn = oldw))
   
   # out$Glu <- imputeTS::na_locf(out$Glu)
-  out$Glu <- na.spline(out$Glu)
+  out$Glu <- na.approx(out$Glu)
   
   #out <- fill(out, c(V1, Glu, location, op))
   
   # pass to density map function
   # densityMap_diff(out$ID[1], jitter(out$Glu), 480, 100, label)
   # densityMap_diff_plus(out$ID[1], jitter(out$Glu), 240, 100, label, 0, 1)
-  densityMap_diff_plus(out$ID[1], out$Glu, 240, 100, label, 0, 1)
+  densityMap_diff_plus(out$ID[1], jitter(out$Glu, amount = 10e-10), 240, 100, label, 0, 1)
   
   }
   
