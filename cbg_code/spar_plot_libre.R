@@ -7,155 +7,150 @@ library(padr)
 library(zoo)
 library(viridis)
 
-x <- fread('~/Documents/data/libre_data/export_1.csv')
-x <- x[order(x$uID, x$admission_vec)]
+# ek2_supervised_7days.csv 336 (7 days) points train. 48 points predict
+x <- fread('~/Documents/data/libre_data/ek2_supervised_7days.csv')
+t_col = 336
 
-#library(dplyr)
-# add unique ID by 2 cols - uID and admission vec
-x <- x %>% mutate(ID = group_indices(x, .dots=c("uID", "admission_vec"))) 
-# x[, 'N' := .N, by=.(uID)]
+train <- x[, 1:t_col]
+test <- x[, (t_col + 1):ncol(x)]
 
-# split out last day and label
-#t <- x[V1 == 203446038]
-x$day <- as.Date(x$dateTime)
-x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(ID)]
-x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) < 5, 1, 0), by=.(ID)]
-# remove the last day from the training set
-x <- x[flag_last_day == 0]
+min_test <- apply(test,1,min)
+label <- ifelse(min_test <3, 1, 0)
 
-x[, 'N' := .N, by=.(ID)]
-x <- x[N>=20]
+train$label <- label
+train$id <- c(1:nrow(train))
 
-x[, 'n' := c(1 : .N), by=.(ID)]
-print(sum(x[n==1]$label))
-print(nrow(x[n==1]))
+# take every nth row (to prevent over similarity)
+n = 48
+train <- train[id%%n==0]
 
-plot(x$dateTime, x$Glu, pch = 16, cex = 0.6, col = ifelse(x$label == 0,
-                                                          rgb(0,0,0,0.4, maxColorValue = 1),
-                                                          rgb(1,0,0,0.4, maxColorValue = 1)))
+# down sample n
+case_n = nrow(train[label ==  1]) # n cases
+ratio = 2
+
+cases    <- train[label == 1]
+controls <- train[label == 0]
+
+set.seed(42)
+select_case <- cases[sample(nrow(cases), case_n), ]
+select_control <- controls[sample(nrow(controls), case_n * ratio), ]
+
+sc <- rbind(cases, select_control)
 
 # create value at 0000 first day (same as first value), and 23.59 (same as last recorded value) on the last day to allow minute fills of data
 
-returnFirstDayTime <- function(sub) {
-  first_day <- substr(sub$dateTime[1], 1, 10)
-  first_val <- sub$Glu[1]
+densityMap_diff_plus <- function(v1, s, i, b, label, limit_min, limit_max) {
   
-  first_point_time <- paste0(first_day, ' 0:00:01')
-  first_point_time <- as.POSIXct(first_point_time, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')
+  # #v1 = sub$ID[1]; s = out$Glu; i = 480
+  # s <- sc[1,]
+  # id <- s$id
+  # label <- s$label
+  # s$label = NULL
+  # s$id = NULL
   
-  sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
-  colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
+  # jpeg(paste0('~/Documents/data/plots_simple/event_,', label, '.jpg'), width = 800, height = 800, units = 'px')
+  # plot(as.numeric(s[1,]))
+  # dev.off()
   
-  insert_top <- as.data.frame(matrix(nrow = 1, ncol = 4))
-  colnames(insert_top) <- c('ID', 'dateTime', 'Glu', 'loc')
-  insert_top$ID <- sub$ID[1]
-  insert_top$dateTime <- first_point_time
-  insert_top$Glu <- first_val
-  insert_top$location <- sub$location[1]
-  #insert_top$op <- sub$op[1]
-  
-  return(insert_top)
-  
-}
-
-returnLastDayTime <- function(sub) {
-  last_day <- substr(sub$dateTime[nrow(sub)], 1, 10)
-  last_val <- sub$Glu[nrow(sub)]
-  
-  last_point_time <- paste0(last_day, ' 23:59:59')
-  last_point_time <- as.POSIXct(last_point_time, format = "%Y-%m-%d %H:%M:%S", tz = 'UTC')
-  
-  sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
-  colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
-  
-  insert_end <- as.data.frame(matrix(nrow = 1, ncol = 4))
-  colnames(insert_end) <- c('ID', 'dateTime', 'Glu', 'loc')
-  insert_end$ID <- sub$ID[1]
-  insert_end$dateTime <- last_point_time
-  insert_end$Glu <- last_val
-  insert_end$location <- sub$location[nrow(sub)]
-  #insert_end$op <- sub$op[nrow(sub)]
-  
-  return(insert_end)
-  
-}
-
-densityMap <- function(v1, s, i, b, label) {
-  
-  #v1 = sub$ID[1]; s = out$Glu; i = 1000
-  s <- log(s)
-  
+  s <- as.numeric(s)
+  s <- s^2
+  #s = (s - 1) / (27 - 1)
+  sd <- c(0, diff(s))
+  # sd = (sd - 0.1) / (27 - 0.1)
+  # 
+  #s <- s * sd
+  # s = (s - min(s)) / (max(s) - min(s))
+  # 
   start_point <- 1
   offset <- i
+  
+  initial_point <- start_point + (2 * offset)
+  end_padding <- length(s) - initial_point
+  
+  x <- s[start_point:end_padding]
+  y <- s[(start_point + offset):(end_padding+offset)]
+  z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
+  
+  #plot(s)
+  
+  # library(rgl); plot3d(x,y,z)
+  
+  # from paper 2D projection 
+  u <- 1/3 * (x + y + z)
+  v <- (1/sqrt(6)) * (x + y - (2 * z))
+  w <- (1/sqrt(2)) * (x - y)
+  
+  # plot(v, w, cex = 0.4, pch=16)
+  
+  range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+  
+  v <- range01(v)
+  w <- range01(w)
+  
+  df <- data.frame(v, w)
+  
+  pixel_n = 200
+  
+  pl_min = limit_min
+  pl_max = limit_max
+  
+  if (label == 1) {
+    jpeg(paste0('~/Documents/data/plots_by_class/hypo/', id, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
     
-    initial_point <- start_point + (2 * offset)
-    end_padding <- length(s) - initial_point
+    m <- ggplot(df, aes(x=v, y=w) ) +
+      geom_hex(bins = 40) +
+      scale_fill_continuous(type = "viridis") +
+      theme_bw() + theme_void()
+    m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
+    print(m)
     
-    x <- s[start_point:end_padding]
-    y <- s[(start_point + offset):(end_padding+offset)]
-    z <- s[(start_point + (offset * 2)):(end_padding+(offset * 2))]
+    dev.off()
+  } else {
+    jpeg(paste0('~/Documents/data/plots_by_class/nohypo/', id, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
     
-    # from paper 2D projection 
-    u <- 1/3 * (x + y + z)
-    v <- (1/sqrt(6)) * (x + y - (2 * z))
-    w <- (1/sqrt(2)) * (x - y)
+    m <- ggplot(df, aes(x=v, y=w) ) +
+      geom_hex(bins = 40) +
+      scale_fill_continuous(type = "viridis") +
+      theme_bw() + theme_void()
+    m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
+    print(m)
     
-    range01 <- function(x){(x-min(x))/(max(x)-min(x))}
-    
-    v <- range01(v)
-    w <- range01(w)
-    
-    df <- data.frame(v, w)
-    
-    pixel_n = 800
-    
-    if (label == 1) {
-      jpeg(paste0('~/Documents/data/plots/event.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-      p <- ggplot(df, aes(x = v, y = w)) +
-        stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-        scale_fill_viridis()
-      p <- p + theme_void() + theme(legend.position = "none")
-      print(p)
-      dev.off()
-    } else {
-      jpeg(paste0('~/Documents/data/plots/nil.', v1, '.', label, '.jpg'), width = 800, height = 800, units = 'px')
-      p <- ggplot(df, aes(x = v, y = w)) +
-        stat_density2d(aes(fill = ..density..), geom = 'tile', n = pixel_n, contour = F) +
-        scale_fill_viridis()
-      p <- p + theme_void() + theme(legend.position = "none")
-      print(p)
-      dev.off()
-    }
-    
+    dev.off()
+  }
+  
+  
 }
 
-idVec <- unique(x$ID)
-print(length(idVec))
+
+idVec <- unique(sc$id)
 for (j in c(1:length(idVec))) {
 #for (j in c(1:100)) {
   
-  if (j%%100 == 0) {print(j)}
+  if (j%%100 == 0) {print(j/nrow(sc))}
   
-  id <- idVec[j]
-  sub <- x[ID == id]
-  label <- sub$label[1]
+  id <- sc$id[j]
+  sub <- sc[j, ]
+  label <- sc$label[j]
   
-  insert_top <- returnFirstDayTime(sub)
-  insert_end <- returnLastDayTime(sub)
-  
-  sub <- data.frame(sub$ID, sub$dateTime, sub$Glu, sub$loc)
-  colnames(sub) <- c('ID', 'dateTime', 'Glu', 'loc')
-    
-  out <- rbind(insert_top, sub, insert_end)
-  out <- out %>% thicken("1 min") %>% select(-dateTime) %>% pad()
-  
-  out$Glu <- na.approx(out$Glu)
+  sub <- sub[, -c('id', 'label')]
+  sub <- as.numeric(sub)
   
   #out <- fill(out, c(V1, Glu, location, op))
   
   # pass to density map function
-  densityMap(out$ID[1], jitter(out$Glu), 480, 100, label)
+  densityMap_diff_plus(id, sub, 24, 100, label, 0 ,1)
   
   }
   
 ## try this as a classifier
+
+
+m <- ggplot(df, aes(x = v, y = w)) +
+  geom_point(alpha = 4/10) + theme_void()
+m <- m + geom_density_2d() + xlim(c(pl_min, pl_max)) + ylim(c(pl_min, pl_max))
+print(m)
+
+ggplot(df, aes(x=v, y=w) ) +
+  geom_hex(bins = 60) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw() + theme_void()
