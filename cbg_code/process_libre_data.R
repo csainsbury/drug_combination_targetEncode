@@ -1,6 +1,7 @@
 library(data.table)
 
 path <- c('~/Documents/data/raw_libre/')
+savepath <- c('~/Documents/data/processed_libre/')
 file_list <- list.files(paste0(path))
 
 
@@ -77,5 +78,8 @@ for (i in c(1:length(file_list))) {
   
   x$Glu[is.na(x$Glu)] <- 0
   x[Glu>0]
+  
+  name <- substr(file_list[i], 1, nchar(file_list[i])-4)
+  write.table(x, file = paste0(savepath, name, '.csv'), sep = ',', row.names = F)
   
 }
