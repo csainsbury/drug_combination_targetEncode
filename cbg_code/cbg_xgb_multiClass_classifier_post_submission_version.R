@@ -19,6 +19,7 @@ dataset <- 'huge'
 days_n  <- 21
 minimum_n_cbgs <- days_n + 2
 hypo_threshold <- 3
+hyper_threshold <- 20
 
 x <- fread(paste0('~/Documents/data/CBGdata/', dataset, '_unipoc_time_series_cohort_first_', days_n,'_days.csv'))
 x <- x[order(x$uID, x$admission_vec)]
