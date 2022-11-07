@@ -16,10 +16,11 @@ library(pROC)
 # 101355572
 
 dataset <- 'huge'
-days_n  <- 21
+days_n  <- 4
 minimum_n_cbgs <- days_n + 2
 hypo_threshold <- 3
 hyper_threshold <- 20
+sample_size <- 10000
 
 x <- fread(paste0('~/Documents/data/CBGdata/', dataset, '_unipoc_time_series_cohort_first_', days_n,'_days.csv'))
 x <- x[order(x$uID, x$admission_vec)]
@@ -49,7 +50,12 @@ x <- x[N_truncated >= minimum_n_cbgs]
 #t <- x[V1 == 203446038]
 #x$day <- as.Date(x$dateTime)
 x[, 'flag_last_day' := ifelse(day == max(day), 1, 0), by=.(ID)]
-x[, 'label' := ifelse(min(Glu[flag_last_day == 1]) <= hypo_threshold, 1, 0), by=.(ID)]
+x[, 'last_day_min' := min(Glu[flag_last_day == 1]), by=.(ID)]
+x[, 'last_day_max' := max(Glu[flag_last_day == 1]), by=.(ID)]
+x$label <- 0
+x[, 'label' := ifelse((last_day_min <= hypo_threshold) & (last_day_max < hyper_threshold), 1, label), by=.(ID)]
+x[, 'label' := ifelse((last_day_max >= hyper_threshold) & (last_day_min > hypo_threshold), 2, label), by=.(ID)]
+x[, 'label' := ifelse((last_day_min <= hypo_threshold) & (last_day_max >= hyper_threshold), 3, label), by=.(ID)]
 # remove the last day from the training set
 x <- x[flag_last_day == 0]
 
@@ -57,26 +63,53 @@ x[, 'N' := .N, by=.(ID)]
 x <- x[N>days_n]
 
 x[, 'n' := c(1 : .N), by=.(ID)]
-print(sum(x[n==1]$label))
-print(nrow(x[n==1]))
+# print(sum(x[n==1]$label))
+# print(nrow(x[n > 0]))
 
 # plot(x$dateTime, x$Glu, pch = 16, cex = 0.6, col = ifelse(x$label == 0,
 #                                                           rgb(0,0,0,0.4, maxColorValue = 1),
 #                                                           rgb(1,0,0,0.4, maxColorValue = 1)))
 
-# produce fixed ratio of case to no case
-ratio = 1
-event_ids <- unique(x[label==1]$ID)
+# produce fixed ratio of case to no case. base on the hypo case
 no_event_ids <- unique(x[label==0]$ID)
-id_sample <- no_event_ids[sample(length(no_event_ids), round(length(event_ids) * ratio), 0)]
+hypo_ids <- unique(x[label==1]$ID)
+hyper_ids <- unique(x[label==2]$ID)
+both_ids <- unique(x[label==3]$ID)
 
-neg <- x[ID %in% id_sample]
-pos <- x[ID %in% event_ids]
+ratio = 1
+hr <- length(hypo_ids)
 
-x <- rbind(neg, pos)
+all_ids <- unique(x$ID)
 
-print(sum(x[n==1]$label))
-print(nrow(x[n==1]))
+if (length(no_event_ids) > hr * ratio) {
+  sample_no_event_ids <- no_event_ids[sample(length(no_event_ids), hr *ratio)]
+}
+if (length(hyper_ids) > hr * ratio) {
+  sample_hyper_ids <- hyper_ids[sample(length(hyper_ids), hr *ratio)]
+} else {
+  sample_hyper_ids <- hyper_ids
+}
+if (length(both_ids) > hr * ratio) {
+  sample_both_ids <- both_ids[sample(length(both_ids), hr *ratio)]
+} else {
+  sample_both_ids <- both_ids
+}
+
+id_sample <- c(hypo_ids, sample_no_event_ids, sample_hyper_ids, sample_both_ids)
+
+#event_ids <- unique(x[label==1]$ID)
+#no_event_ids <- unique(x[label==0]$ID)
+# id_sample <- all_ids[sample(length(all_ids), sample_size)]
+
+# neg <- x[ID %in% id_sample]
+# pos <- x[ID %in% event_ids]
+# 
+# x <- rbind(neg, pos)
+# 
+# print(sum(x[n==1]$label))
+# print(nrow(x[n==1]))
+sample_x <- x[ID %in% id_sample]
+as.data.frame(table(sample_x[n==1]$label))
 
 s <- x
 
@@ -193,14 +226,14 @@ for (j in c(1:ncol(export))) {
   export[, j] <- as.numeric(export[, j])
 }
 
-write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '.csv'), sep = ',', row.names = F)
+write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/MULTICLASS_export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '.csv'), sep = ',', row.names = F)
 
-export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '.csv'))
+# export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '.csv'))
 
 ##### build model
 ##
 export = data.table(export)
-k = 4
+k = 10
 flds <- createFolds(export$label, k, list = T, returnTrain = F)
 
 auc_vec <- rep(0, k)
@@ -234,8 +267,18 @@ for (kfold in c(1:k)) {
   watchlist = list(train=xgb_train, test=xgb_test)
   
   #fit XGBoost model and display training and testing data at each round
-  param <- list(max.depth = maxd, eta = 0.1, nthread = 64, min_child_weight = 1)
-  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 140, verbose = 0)
+  numberOfClasses = 4
+  param <- list(max.depth = maxd, eta = 0.1, nthread = 64, min_child_weight = 1,
+                "objective" = "multi:softprob", "eval_metric" = "mlogloss",
+                "num_class" = numberOfClasses)
+  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 140, verbose = 1)
+  
+  cv_model <- xgb.cv(params = param,
+                     data = train, 
+                     nrounds = 140,
+                     nfold = cv.nfold,
+                     verbose = FALSE,
+                     prediction = TRUE)
   
   # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
   # plot(model$evaluation_log$test_rmse)
@@ -244,7 +287,12 @@ for (kfold in c(1:k)) {
   print(n)
   n_vec[kfold] <- n
   
-  final = xgboost(data = xgb_train, max.depth = maxd, nrounds = n, verbose = 1)
+  final = xgboost(param, data = xgb_train, max.depth = maxd, nrounds = n, verbose = 1)
+  
+  OOF_prediction <- data.frame(model$pred) %>%
+    mutate(max_prob = max.col(., ties.method = "last"),
+           label = label + 1)
+  head(OOF_prediction)
   
   pred_y = predict(final, xgb_test)
   # hist(pred_y, 100)
