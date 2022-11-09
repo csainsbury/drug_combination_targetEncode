@@ -14,9 +14,9 @@ library(caret)
 library(pROC)
 
 # prediction period (15 min increment values)
-hours <- 4
+hours <- 8
 prediction_bin <- hours * 4
-gap_hours <- 0
+gap_hours <- 0.5
 gap_bins <- gap_hours * 4
 downsample <- 1
 
