@@ -14,9 +14,9 @@ library(caret)
 library(pROC)
 
 # prediction period (15 min increment values)
-hours <- 8
+hours <- 4
 prediction_bin <- hours * 4
-gap_hours <- 0.5
+gap_hours <- 0
 gap_bins <- gap_hours * 4
 downsample <- 1
 
@@ -25,7 +25,7 @@ file_list <- list.files(paste0(sup_path))
 n_ids = 15 # need automated way of determining number of IDs data
 
 # n_vec <- c('al1', 'ak1', 'at1','cd1','hm1','mv1','ps1','se1','ek2')
-load_train <- 384 # 192 # 96 # 384
+load_train <- 192 # 192 # 96 # 384
 load_test <- 96
 
 for (n in c(1:n_ids)) {
@@ -56,11 +56,12 @@ train$id <- c(1:nrow(train))
 
 # take every nth row (to prevent over similarity)
 n = prediction_bin
+# n = load_train
 train <- train[id%%n==0]
 
 # down sample n
 case_n = nrow(train[label ==  1]) # n cases
-ratio = 1
+ratio = 4
 
 cases    <- train[label == 1]
 controls <- train[label == 0]
@@ -223,8 +224,7 @@ colnames(export) <- coln_n
 for (j in c(1:ncol(export))) {
   export[, j] <- as.numeric(export[, j])
 }
-# 
-write.table(export, file = paste0('Documents/data/libre_data/libre_export/v2_', n_ids,'_IDs_trainBins_', load_train, '_predictionBins_', prediction_bin, '_gapBins_', gap_bins,'.csv'), sep = ',', row.names = F)
+# write.table(export, file = paste0('Documents/data/libre_data/libre_export/v2_', n_ids,'_IDs_trainBins_', load_train, '_predictionBins_', prediction_bin, '_gapBins_', gap_bins,'.csv'), sep = ',', row.names = F)
 # 
 # export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days.csv'))
 
@@ -243,7 +243,7 @@ accuracy_v <- rep(0, k)
 balanced_accuracy_v <- rep(0, k)
 f1 <- rep(0, k)
 
-maxd = 8
+maxd = 4
 
 for (kfold in c(1:k)) {
   
@@ -268,7 +268,7 @@ for (kfold in c(1:k)) {
   #fit XGBoost model and display training and testing data at each round
   param <- list(max.depth = maxd, eta = 0.1, nthread = 64, gamma = 2, min_child_weight = 1, objective = 'binary:logistic')
   model = xgb.train(param, data = xgb_train, watchlist=watchlist,
-                    # lambda = 1000,
+                    lambda = 10,
                     nrounds = 100, verbose = 1)
   
   # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
@@ -404,6 +404,36 @@ base_predictions_cv <- function(ID, Glu, label) {
                         as.factor(single_d$label),
                         positive = '1',
                         prevalence = 0.33))
+  cm = confusionMatrix(as.factor(ifelse(single_d$cV > bestthresh, 1, 0)),
+                       as.factor(single_d$label),
+                       positive = '1',
+                       prevalence = 0.33)
+  
+  return(list(as.numeric(auc(roc_obj)),
+              as.numeric(cm$overall[1]), # accuracy
+              as.numeric(cm$byClass[11]), # balanced accuracy
+              as.numeric(cm$byClass[7]),# f1
+              as.numeric(cm$byClass[1]),# sens
+              as.numeric(cm$byClass[2]))) # spec
+  
+  
+}
+
+libreBase_predictions_cv <- function(x, y) {
+  
+  # x = train_x; y = train_y
+  d <- data.table(x)
+  d <- d %>% select(cV)
+  
+  require(pROC)
+  roc_obj <- roc(y$label, d$cV)
+  print(auc(roc_obj))
+  
+  bestthresh <- as.numeric(coords(roc_obj, "best", ret="threshold", transpose = FALSE)[1,])
+  print(confusionMatrix(as.factor(ifelse(d$cV > bestthresh, 1, 0)),
+                        as.factor(y$label),
+                        positive = '1',
+                        prevalence = 0.2))
   cm = confusionMatrix(as.factor(ifelse(single_d$cV > bestthresh, 1, 0)),
                        as.factor(single_d$label),
                        positive = '1',
