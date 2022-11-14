@@ -61,7 +61,7 @@ train <- train[id%%n==0]
 
 # down sample n
 case_n = nrow(train[label ==  1]) # n cases
-ratio = 4
+ratio = 1
 
 cases    <- train[label == 1]
 controls <- train[label == 0]
@@ -226,7 +226,7 @@ for (j in c(1:ncol(export))) {
 }
 # write.table(export, file = paste0('Documents/data/libre_data/libre_export/v2_', n_ids,'_IDs_trainBins_', load_train, '_predictionBins_', prediction_bin, '_gapBins_', gap_bins,'.csv'), sep = ',', row.names = F)
 # 
-# export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days.csv'))
+# export1 <- fread(paste0('Documents/data/libre_data/libre_export/v2_', n_ids,'_IDs_trainBins_', load_train, '_predictionBins_', prediction_bin, '_gapBins_', gap_bins,'.csv'))
 
 ##### build model
 ##
