@@ -132,4 +132,24 @@ for (k in c(1:nrow(both_last))) {
     }
 }
 
+# summary data per admission (for prior admission info)
+m[, 'max_by_admission' := max(Glu), by=.(uID, admission_vec)]
+m[, 'min_by_admission' := min(Glu), by=.(uID, admission_vec)]
+m[, 'median_by_admission' := median(Glu), by=.(uID, admission_vec)]
+m[, 'iqr_by_admission' := quantile(Glu)[4]-quantile(Glu)[2], by=.(uID, admission_vec)]
+
+m[, 'gradient_by_admission' := as.numeric(lm(Glu ~ dateTime)$coefficients[2]), by=.(uID, admission_vec)]
+m[, 'sd_cbg_by_admission' := sd(Glu) , by=.(uID, admission_vec)]
+m[, 'mean_cbg_by_admission' := mean(Glu) , by=.(uID, admission_vec)]
+m[, 'cV_by_admission' := sd_cbg_by_admission/mean_cbg_by_admission , by=.(uID, admission_vec)]
+
+# build X, y
+X_build <- both_last[match==1]
+
+# index admission glucose params and y
+
+
+
+
+
 
