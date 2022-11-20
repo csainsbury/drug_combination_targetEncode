@@ -16,7 +16,7 @@ library(pROC)
 # 101355572
 
 dataset <- 'huge'
-days_n  <- 7
+days_n  <- 2
 minimum_n_cbgs <- days_n + 2
 hypo_threshold <- 3
 
@@ -64,7 +64,7 @@ print(nrow(x[n==1]))
 #                                                           rgb(1,0,0,0.4, maxColorValue = 1)))
 
 # produce fixed ratio of case to no case
-ratio = 4
+ratio = 1
 event_ids <- unique(x[label==1]$ID)
 no_event_ids <- unique(x[label==0]$ID)
 id_sample <- no_event_ids[sample(length(no_event_ids), round(length(event_ids) * ratio), 0)]
@@ -83,7 +83,13 @@ s[, 'max_by_day' := max(Glu), by=.(ID, day)]
 s[, 'min_by_day' := min(Glu), by=.(ID, day)]
 s[, 'median_by_day' := median(Glu), by=.(ID, day)]
 s[, 'iqr_by_day' := quantile(Glu)[4]-quantile(Glu)[2], by=.(ID, day)]
-
+  s[, 'sd_by_day' := sd(Glu) ,by=.(ID, day)]
+  s[, 'mean_by_day' := mean(Glu) ,by=.(ID, day)]
+  s[, 'cV_by_day' := sd_by_day/mean_by_day ,by=.(ID, day)]
+  
+s[, 'training_min' := min(Glu) ,by=.(ID)]
+s[, 'training_max' := max(Glu) ,by=.(ID)]
+  
 s[, 'day_n' := c(1:.N), by=.(ID, day)]
 s[, 'day_N' := .N, by=.(ID, day)]
 s[, 'gradient' := as.numeric(lm(Glu ~ dateTime)$coefficients[2]), by=.(ID)]
@@ -107,7 +113,7 @@ for (i in c(1:length(ids))) {
   sub <- s[ID == ids[i]]
   sub <- sub[day_n == 1]
   
-  sub <- sub %>% select(ID, dateTime, day, Glu, max_by_day, min_by_day, median_by_day, day_N, iqr_by_day, cV, gradient, label)
+  sub <- sub %>% select(ID, dateTime, day, Glu, max_by_day, min_by_day, median_by_day, day_N, iqr_by_day, cV_by_day, training_min, training_max, cV, gradient, label)
   
   if ((nrow(sub) > 0) & (as.numeric(min(diff(as.Date(sub$dateTime)))) <= 1)) { # second arguement needed to ensure that minimum time step is not greater than 1 day (thicken will no work if it is)
     
@@ -124,10 +130,12 @@ for (i in c(1:length(ids))) {
     
     cV <- sub$cV[1]
     gradient <- sub$gradient[1]
+    training_min <- sub$training_min[1]
+    training_max <- sub$training_max[1]
     id <- sub$ID[1]
     label <- sub$label[1]
     
-    sub <- sub %>% select(dateTime, Glu, max_by_day, min_by_day, median_by_day, day_N, iqr_by_day)
+    sub <- sub %>% select(dateTime, Glu, max_by_day, min_by_day, median_by_day, day_N, iqr_by_day, cV_by_day)
     sub <- sub %>% thicken("1 day") %>% select(-dateTime) %>% pad()
     
     # sub.locf <- na.locf(sub)
@@ -139,10 +147,12 @@ for (i in c(1:length(ids))) {
     m <- as.data.frame(t(melt.sub))
     m$cV <- cV
     m$gradient <- gradient
+    m$training_min <- training_min
+    m$training_max <- training_max
     m$id <- id
     m$label <- label
     m <- m[-1, ]
-    colnames(m) <- c(m[1,1:(ncol(m) - 4)],'cV' ,'gradient' ,'id', 'label')
+    colnames(m) <- c(m[1,1:(ncol(m) - 6)],'cV' ,'gradient' , 'training_min', 'training_max','id', 'label')
     m <- m[-1, ]
     
     if (i == 1) {
@@ -163,9 +173,10 @@ min_names <- coln[coln == 'min_by_day']
 med_names <- coln[coln == 'median_by_day']
 N_names <- coln[coln == 'day_N']
 iqr_names <- coln[coln == 'iqr_by_day']
+cVday_names <- coln[coln == 'cV_by_day']
 
 other_names <- coln[coln != 'max_by_day' & coln != 'min_by_day' & coln != 'iqr_by_day' &
-                      coln != 'median_by_day' & coln != 'day_N' ]
+                      coln != 'median_by_day' & coln != 'day_N'  & coln != 'cV_by_day']
 
 for (c in c(1:length(max_names))) {
   max_names[c] <- paste0(max_names[c], '_', c)
@@ -182,8 +193,11 @@ for (c in c(1:length(med_names))) {
 for (c in c(1:length(N_names))) {
   N_names[c] <- paste0(N_names[c], '_', c)
 }
+for (c in c(1:length(cVday_names))) {
+  cVday_names[c] <- paste0(cVday_names[c], '_', c)
+}
 
-coln_n <- c(max_names, min_names, med_names, N_names, iqr_names, other_names)
+coln_n <- c(max_names, min_names, med_names, N_names, iqr_names, cVday_names, other_names)
 colnames(exp) <- coln_n
 
 export <- exp
@@ -192,9 +206,9 @@ for (j in c(1:ncol(export))) {
   export[, j] <- as.numeric(export[, j])
 }
 
-write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '.csv'), sep = ',', row.names = F)
+write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio,'.csv'), sep = ',', row.names = F)
 
-export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '.csv'))
+# export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio, '.csv'))
 
 ##### build model - bayes opt
 splits <- rsample::initial_split(export, prop = 0.8)
@@ -246,10 +260,10 @@ obj_func <- function(eta, max_depth, min_child_weight, subsample, lambda, alpha)
   xgbcv <- xgb.cv(params = param,
                   data = X,
                   label = y,
-                  nround = 100,
+                  nround = 400,
                   folds = folds,
                   prediction = TRUE,
-                  early_stopping_rounds = 5,
+                  early_stopping_rounds = 20,
                   verbose = 1,
                   maximize = F)
   
@@ -267,13 +281,13 @@ obj_func <- function(eta, max_depth, min_child_weight, subsample, lambda, alpha)
 }
 
 bounds <- list(eta = c(0.001, 0.6),
-               max_depth = c(1L, 20L),
+               max_depth = c(1L, 30L),
                min_child_weight = c(1, 100),
                subsample = c(0.01, 1),
                lambda = c(1, 100),
                alpha = c(1, 100))
-set.seed(1234)
-bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = length(bounds) + 2, iters.n = 80)
+set.seed(42)
+bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = length(bounds) + 2, iters.n = 2)
 
 bayes_out$scoreSummary
 data.frame(getBestPars(bayes_out))
@@ -294,7 +308,7 @@ accuracy_v <- rep(0, k)
 balanced_accuracy_v <- rep(0, k)
 f1 <- rep(0, k)
 
-maxd = 10
+maxd = 1
 
 for (kfold in c(1:k)) {
   
@@ -317,9 +331,9 @@ for (kfold in c(1:k)) {
   watchlist = list(train=xgb_train, test=xgb_test)
   
   #fit XGBoost model and display training and testing data at each round
-  param <- list(max.depth = maxd, eta = 0.363049, nthread = 64, min_child_weight = 1)
-  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 40, verbose = 0,
-                    subsample = 1, lambda = 2.231937, alpha = 1)
+  param <- list(max.depth = maxd, eta = 0.5329402, nthread = 64, min_child_weight = 1)
+  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 400, verbose = 0,
+                    subsample = 1, lambda = 1, alpha = 1)
   
   # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
   # plot(model$evaluation_log$test_rmse)
@@ -419,9 +433,147 @@ importance_matrix[1:20,]
 # medians <- medians[order(-medians$medians), ]
 # medians
 
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+## leave one out
+
+export = data.table(export)
+
+k = nrow(export)
+
+prediction <- rep(0, k)
+ground_t <- rep(0, k)
+
+n_vec <- rep(0, k)
+
+maxd = 1
+
+for (kfold in c(1:nrow(export))) {
+  
+  print(kfold/k)
+  
+  train = export[-kfold,]
+  test  = export[kfold,]
+  
+  #define predictor and response variables in training set
+  train_x = data.matrix(train[, -c('id', 'label')])
+  train_y = train[,'label']
+  
+  #define predictor and response variables in testing set
+  test_x = data.matrix(test[, -c('id', 'label')])
+  test_y = test[,'label']
+  
+  #define final training and testing sets
+  xgb_train = xgb.DMatrix(data = as.matrix(train_x), label = train_y$label)
+  xgb_test = xgb.DMatrix(data = as.matrix(test_x), label = test_y$label)
+  
+  #define watchlist
+  watchlist = list(train=xgb_train, test=xgb_test)
+  
+  #fit XGBoost model and display training and testing data at each round
+  param <- list(max.depth = maxd, eta = 0.5329402, nthread = 64, min_child_weight = 1)
+  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 300, verbose = 0,
+                    subsample = 1, lambda = 1, alpha = 1)
+  
+  # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
+  # plot(model$evaluation_log$test_rmse)
+  
+  n = which(model$evaluation_log$test_rmse == min(model$evaluation_log$test_rmse))
+  print(n)
+  n_vec[kfold] <- n[1]
+  
+  final = xgboost(data = xgb_train, max.depth = maxd, nrounds = n, verbose = 0)
+  
+  pred_y = predict(final, xgb_test)
+  
+  prediction[kfold] = pred_y
+  ground_t[kfold] = test_y$label
+  # hist(pred_y, 100)
+  
+}
+
+    ## save out last trained model
+    model_save_name = paste0(paste0('Documents/data/CBGdata/savedModels/modelSAVE_', days_n,
+                                    '_days_hypothresh_', hypo_threshold,
+                                    '_ratio_', ratio,
+                                    '_maxd_', maxd,'.model'))
+    model_dump_name = paste0(paste0('Documents/data/CBGdata/savedModels/modelDUMP_', days_n,
+                                    '_days_hypothresh_', hypo_threshold,
+                                    '_ratio_', ratio,
+                                    '_maxd_', maxd,'.txt'))
+    
+    xgb.save(model, model_save_name)
+    xgb.dump(model, model_dump_name, with_stats = FALSE)
+
+print(quantile(n_vec))
+hist(n_vec, 80)
+##
+pROC_obj <- roc(ground_t,prediction,
+                # arguments for ci
+                ci=TRUE,
+                # arguments for plot
+                plot=FALSE, grid=TRUE,
+                print.auc=TRUE)
+
+#auc_vec[kfold] <- pROC_obj$auc
+
+c = coords(pROC_obj, "best", "threshold")
+threshold = c$threshold
+
+print(pROC_obj$auc)
+
+plot(pROC_obj$specificities, pROC_obj$sensitivities, xlim = c(1, 0), cex = 0)
+lines(pROC_obj$specificities, pROC_obj$sensitivities, col = rgb(0,0,0,0.6, maxColorValue = 1), lwd=2)
+
+hist(prediction, 60)
+
+## generate validation accuracy metric
+pred_acc <- ifelse(prediction >= c$threshold, 1, 0)
+cm <- confusionMatrix(as.factor(pred_acc), as.factor(ground_t), positive = '1')
+print(threshold)
+print(cm)
+
+print(cm$byClass[7])
+
+importance_matrix = xgb.importance(colnames(xgb_train), model = model)
+xgb.plot.importance(importance_matrix)
+importance_matrix <- importance_matrix[order(-importance_matrix$Importance), ]
+importance_matrix[1:20,]
+
+## save out prediction data frame
+export$prediction = prediction
+
+write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio,'_WITH_LOO_PRED.csv'), sep = ',', row.names = F)
+
+
+plot(export$cV, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
+
+plot(export$min_by_day_20, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
+plot(export$min_by_day_7, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
+plot(export$min_by_day_1, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
+
+boxplot(export$prediction ~ cut(export$min_by_day_20, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$min_by_day_7, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$min_by_day_1, 100), varwidth=T)
+
+boxplot(export$prediction ~ cut(export$max_by_day_20, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$max_by_day_7, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$max_by_day_1, 100), varwidth=T)
+
+boxplot(export$prediction ~ export$day_N_13, varwidth=T)
+boxplot(export$prediction ~ export$day_N_7, varwidth=T)
+boxplot(export$prediction ~ export$day_N_1, varwidth=T)
+
+boxplot(export$prediction ~ cut(export$gradient, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$cV, 100), varwidth=T)
+
+
 ## visualise trees
 require(DiagrammeR)
-xgb.plot.tree(model = model, trees = 1)
+jpeg(paste0('Documents/data/CBGdata/treeplots/single_tree_plot_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio, '_maxd_', maxd,'.jpeg'))
+xgb.plot.tree(model = model, trees = c(1), render = TRUE)
+dev.off()
 
 hist(outputTable_cat$pred, 100)
 
