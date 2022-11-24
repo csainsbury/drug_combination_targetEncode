@@ -13,10 +13,10 @@ library(xgboost)
 library(caret)
 library(pROC)
 
-# 101355572
+# install.packages(c('data.table', 'tidyverse', 'tidyquant', 'timetk', 'padr', 'zoo', 'imputeTS', 'xgboost', 'caret', 'pROC'))
 
 dataset <- 'huge'
-days_n  <- 2
+days_n  <- 14
 minimum_n_cbgs <- days_n + 2
 hypo_threshold <- 3
 
@@ -64,7 +64,7 @@ print(nrow(x[n==1]))
 #                                                           rgb(1,0,0,0.4, maxColorValue = 1)))
 
 # produce fixed ratio of case to no case
-ratio = 1
+ratio = 4
 event_ids <- unique(x[label==1]$ID)
 no_event_ids <- unique(x[label==0]$ID)
 id_sample <- no_event_ids[sample(length(no_event_ids), round(length(event_ids) * ratio), 0)]
@@ -211,7 +211,9 @@ write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/expor
 # export1 <- fread(paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio, '.csv'))
 
 ##### build model - bayes opt
-splits <- rsample::initial_split(export, prop = 0.8)
+require(ParBayesianOptimization)
+
+splits <- rsample::initial_split(export, prop = 0.7)
 # Training set
 train_df <- rsample::training(splits)
 # Test set
@@ -233,7 +235,11 @@ y <- train_df %>%
 
 # Cross validation folds
 folds <- list(fold1 = as.integer(seq(1, nrow(X), by = 5)),
-              fold2 = as.integer(seq(2, nrow(X), by = 5)))
+              fold2 = as.integer(seq(2, nrow(X), by = 5)),
+              fold3 = as.integer(seq(3, nrow(X), by = 5)),
+              fold4 = as.integer(seq(4, nrow(X), by = 5)),
+              fold5 = as.integer(seq(5, nrow(X), by = 5))
+              )
 
 # Function must take the hyper-parameters as inputs
 obj_func <- function(eta, max_depth, min_child_weight, subsample, lambda, alpha) {
@@ -260,10 +266,10 @@ obj_func <- function(eta, max_depth, min_child_weight, subsample, lambda, alpha)
   xgbcv <- xgb.cv(params = param,
                   data = X,
                   label = y,
-                  nround = 400,
+                  nround = 600,
                   folds = folds,
                   prediction = TRUE,
-                  early_stopping_rounds = 20,
+                  early_stopping_rounds = 50,
                   verbose = 1,
                   maximize = F)
   
@@ -287,158 +293,32 @@ bounds <- list(eta = c(0.001, 0.6),
                lambda = c(1, 100),
                alpha = c(1, 100))
 set.seed(42)
-bayes_out <- bayesOpt(FUN = obj_func, bounds = bounds, initPoints = length(bounds) + 2, iters.n = 2)
+bayes_out <- bayesOpt(FUN = obj_func,
+                      bounds = bounds,
+                      initPoints = length(bounds) + 2,
+                      iters.n = 60,
+                      iters.k = 6,
+                      plotProgress = T)
 
 bayes_out$scoreSummary
 data.frame(getBestPars(bayes_out))
 
-
-
-
-##
-export = data.table(export)
-k = 4
-flds <- createFolds(export$label, k, list = T, returnTrain = F)
-
-auc_vec <- rep(0, k)
-n_vec <- rep(0, k)
-threshold_frame <- as.data.frame(matrix(nrow = k, ncol = 3))
-
-accuracy_v <- rep(0, k)
-balanced_accuracy_v <- rep(0, k)
-f1 <- rep(0, k)
-
-maxd = 1
-
-for (kfold in c(1:k)) {
-  
-  train = export[-flds[[kfold]], ]
-  test  = export[flds[[kfold]], ]
-  
-  #define predictor and response variables in training set
-  train_x = data.matrix(train[, -c('id', 'label')])
-  train_y = train[,'label']
-  
-  #define predictor and response variables in testing set
-  test_x = data.matrix(test[, -c('id', 'label')])
-  test_y = test[,'label']
-  
-  #define final training and testing sets
-  xgb_train = xgb.DMatrix(data = as.matrix(train_x), label = train_y$label)
-  xgb_test = xgb.DMatrix(data = as.matrix(test_x), label = test_y$label)
-  
-  #define watchlist
-  watchlist = list(train=xgb_train, test=xgb_test)
-  
-  #fit XGBoost model and display training and testing data at each round
-  param <- list(max.depth = maxd, eta = 0.5329402, nthread = 64, min_child_weight = 1)
-  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 400, verbose = 0,
-                    subsample = 1, lambda = 1, alpha = 1)
-  
-  # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
-  # plot(model$evaluation_log$test_rmse)
-  
-  n = which(model$evaluation_log$test_rmse == min(model$evaluation_log$test_rmse))
-  print(n)
-  n_vec[kfold] <- n
-  
-  final = xgboost(data = xgb_train, max.depth = maxd, nrounds = n, verbose = 1)
-  
-  pred_y = predict(final, xgb_test)
-  # hist(pred_y, 100)
-  
-  ##
-  pROC_obj <- roc(test_y$label,pred_y,
-                  # arguments for ci
-                  ci=TRUE,
-                  # arguments for plot
-                  plot=FALSE, grid=TRUE,
-                  print.auc=TRUE)
-  
-  auc_vec[kfold] <- pROC_obj$auc
-  
-  c = coords(pROC_obj, "best", "threshold")
-  threshold_frame[kfold, ] = c
-  
-  print(pROC_obj$auc)
-  
-  if (kfold == 1) {
-    plot(pROC_obj$specificities, pROC_obj$sensitivities, xlim = c(1, 0), cex = 0)
-    lines(pROC_obj$specificities, pROC_obj$sensitivities, col = rgb(0,0,0,0.6, maxColorValue = 1), lwd=2)
-  } else{
-    points(pROC_obj$specificities, pROC_obj$sensitivities, cex = 0)
-    lines(pROC_obj$specificities, pROC_obj$sensitivities, col = rgb(0,0,0,0.6, maxColorValue = 1), lwd=2)
-  }
-  
-  ## generate validation accuracy metric
-  pred_acc <- ifelse(pred_y >= c$threshold, 1, 0)
-  cm <- confusionMatrix(as.factor(pred_acc), as.factor(test_y$label))
-  
-  accuracy_v[kfold] <- cm$overall[1]
-  balanced_accuracy_v[kfold] <- cm$byClass[11]
-  f1[kfold] <- cm$byClass[7]
-  
-    outputTable <- data.table('pred' = pred_y, 'ref' = test_y$label)
-    importance_matrix = xgb.importance(colnames(xgb_train), model = model)
-    importance_matrix = data.table('Feature' = importance_matrix$Feature,
-                                   'Gain' = importance_matrix$Gain)
-    
-    if (kfold == 1) {
-      outputTable_cat <- outputTable
-      colnames(importance_matrix)[2:ncol(importance_matrix)] <- paste0(colnames(importance_matrix)[2:ncol(importance_matrix)], '_', kfold)
-      imp_merge <- importance_matrix
-    } else {
-      outputTable_cat <- rbind(outputTable_cat, outputTable)
-      colnames(importance_matrix)[2:ncol(importance_matrix)] <- paste0(colnames(importance_matrix)[2:ncol(importance_matrix)], '_', kfold)
-      #imp_merge <- merge(imp_merge, importance_matrix, by.x = 'Feature', by.y = 'Feature', all.x = T, allow.cartesian = T)
-      # importance_matrix_merge = merge(importance_matrix_merge, importance_matrix, by.x = 'Feature', by.y = 'Feature')
-      
-    }
-  
-  # if (kfold == k) {
-  #   legend(0.2, 0.8, legend=paste0('kf auroc: ', round(auc_vec, 4)), cex=0.8)
-  #   legend(0.2, 0.2, legend=paste0('t/sen/spec: ', round(apply(threshold_frame, 2, median), 2)), cex=0.8)
-  # }
-  
-  
-}
-
-print(quantile(auc_vec))
-print(quantile(n_vec))
-print(threshold_frame)
-
-print(quantile(accuracy_v))
-print(quantile(balanced_accuracy_v))
-print(quantile(f1))
-
-print(quantile(threshold_frame[,2]))
-print(quantile(threshold_frame[,3]))
-
-importance_matrix = xgb.importance(colnames(xgb_train), model = model)
-xgb.plot.importance(importance_matrix)
-importance_matrix <- importance_matrix[order(-importance_matrix$Importance), ]
-importance_matrix[1:20,]
-# 
-# timp <- t(imp_merge)
-# timp <- data.frame(timp)
-# colnames(timp) <- timp[1,]
-# timp = timp[-1,]
-# for (jj in c(1:ncol(timp))) {
-#   timp[, jj] <- as.numeric(timp[, jj])
-# }
-# 
-# medians <- data.frame(sapply(timp, function(x) median(as.numeric(x), na.rm = T) ))
-# colnames(medians) <- c('medians')
-# medians$name <- row.names(medians)
-# medians <- medians[order(-medians$medians), ]
-# medians
+best_params = data.frame(getBestPars(bayes_out))
 
 
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
 ## leave one out
 
+export.orig = export
+sample_rows = 800
+export = export.orig[sample(nrow(export.orig), sample_rows), ]
+export$prediction = NULL
+
 export = data.table(export)
+round_n = 60
+
+use_bayes_opt = 1
 
 k = nrow(export)
 
@@ -446,8 +326,6 @@ prediction <- rep(0, k)
 ground_t <- rep(0, k)
 
 n_vec <- rep(0, k)
-
-maxd = 1
 
 for (kfold in c(1:nrow(export))) {
   
@@ -472,9 +350,19 @@ for (kfold in c(1:nrow(export))) {
   watchlist = list(train=xgb_train, test=xgb_test)
   
   #fit XGBoost model and display training and testing data at each round
-  param <- list(max.depth = maxd, eta = 0.5329402, nthread = 64, min_child_weight = 1)
-  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 300, verbose = 0,
-                    subsample = 1, lambda = 1, alpha = 1)
+  if (use_bayes_opt == 1) {
+    param <- list(max.depth = best_params$max_depth,
+                  eta = best_params$eta,
+                  min_child_weight = best_params$min_child_weight,
+                  subsample = best_params$subsample,
+                  lambda= best_params$lambda,
+                  alpha = best_params$alpha
+                  )
+  } else {
+    param <- list(max.depth = 2, eta = 0.5329402, nthread = 64, min_child_weight = 1)
+  }
+  
+  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = round_n, verbose = 0)
   
   # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
   # plot(model$evaluation_log$test_rmse)
@@ -483,7 +371,7 @@ for (kfold in c(1:nrow(export))) {
   print(n)
   n_vec[kfold] <- n[1]
   
-  final = xgboost(data = xgb_train, max.depth = maxd, nrounds = n, verbose = 0)
+  final = xgboost(data = xgb_train, nrounds = n[1], verbose = 0)
   
   pred_y = predict(final, xgb_test)
   
@@ -549,24 +437,28 @@ write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/expor
 
 plot(export$cV, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 
-plot(export$min_by_day_20, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
+plot(export$min_by_day_13, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 plot(export$min_by_day_7, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 plot(export$min_by_day_1, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 
-boxplot(export$prediction ~ cut(export$min_by_day_20, 100), varwidth=T)
-boxplot(export$prediction ~ cut(export$min_by_day_7, 100), varwidth=T)
-boxplot(export$prediction ~ cut(export$min_by_day_1, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$min_by_day_13, 60), varwidth=T)
+boxplot(export$prediction ~ cut(export$min_by_day_7, 60), varwidth=T)
+boxplot(export$prediction ~ cut(export$min_by_day_1, 60), varwidth=T)
 
-boxplot(export$prediction ~ cut(export$max_by_day_20, 100), varwidth=T)
-boxplot(export$prediction ~ cut(export$max_by_day_7, 100), varwidth=T)
-boxplot(export$prediction ~ cut(export$max_by_day_1, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$max_by_day_13, 20), varwidth=T)
+boxplot(export$prediction ~ cut(export$max_by_day_7, 60), varwidth=T)
+boxplot(export$prediction ~ cut(export$max_by_day_1, 60), varwidth=T)
+
+boxplot(export$prediction ~ cut(export$iqr_by_day_13, 20), varwidth=T)
+boxplot(export$prediction ~ cut(export$iqr_by_day_7, 60), varwidth=T)
+boxplot(export$prediction ~ cut(export$iqr_by_day_1, 60), varwidth=T)
 
 boxplot(export$prediction ~ export$day_N_13, varwidth=T)
 boxplot(export$prediction ~ export$day_N_7, varwidth=T)
 boxplot(export$prediction ~ export$day_N_1, varwidth=T)
 
-boxplot(export$prediction ~ cut(export$gradient, 100), varwidth=T)
-boxplot(export$prediction ~ cut(export$cV, 100), varwidth=T)
+boxplot(export$prediction ~ cut(export$gradient, 60), varwidth=T)
+boxplot(export$prediction ~ cut(export$cV, 60), varwidth=T)
 
 
 ## visualise trees

@@ -51,6 +51,9 @@ ids$uID <- c(id_start:(id_start + (nrow(ids) - 1)))
 m <- merge(ids, subset, by.x = 'V1', by.y = 'CHI')
 m <- m[order(-m$N, m$dateTime), ]
 
+# required output
+# "uID", "admission_vector", "datetime", "Glu", "loc", "dateTime", "unix_dateTime", "n_admissions", "interval_seconds", "interval_days", "n", "N", "new_interval_seconds", "admission_vec"   
+
 ## for compatibility-> reshape here into unipoc format
 
 # identify each admission using 7 day lockout period
