@@ -28,7 +28,7 @@ admission_N <- function(datetime, admissionThresholdDays) {
 }
 
 # return vector admission number per ID
-admission_N_vector <- function(datetime, admissionThresholdDays) {
+admission_N_vector <- function(datetime, admissionThresholdDays=7) {
   datetime <- datetime[order(datetime)]
   difference <- diff(datetime)
   flag <- ifelse(difference > (60*60*24*admissionThresholdDays), 1, 0)
