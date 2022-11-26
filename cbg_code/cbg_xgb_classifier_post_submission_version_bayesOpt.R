@@ -19,12 +19,12 @@ source('~/Documents/code/cbg_code/cbg_functions.R')
 # install.packages(c('data.table', 'tidyverse', 'tidyquant', 'timetk', 'padr', 'zoo', 'imputeTS', 'xgboost', 'caret', 'pROC'))
 
 dataset <- 'huge'
-days_n  <- 7
+days_n  <- 21
 minimum_n_cbgs <- days_n + 2
 hypo_threshold <- 3
 lockout = 7
 
-ratio = 2
+ratio = 4
 
 exclude_locations <- function(data, exclude_vector) {
   
@@ -450,12 +450,12 @@ best_params = data.frame(getBestPars(bayes_out))
 ## leave one out
 
 export.orig = export
-sample_rows = 2000
+sample_rows = 400
 export = export.orig[sample(nrow(export.orig), sample_rows), ]
 export$prediction = NULL
 
 export = data.table(export)
-round_n = 100
+round_n = 600
 
 use_bayes_opt = 1
 
@@ -534,11 +534,11 @@ whole_model <- xgb.train(param,
 
 
     ## save out last trained model
-    model_save_name = paste0(paste0('Documents/data/CBGdata/savedModels/wholeData_modelSAVE_', days_n,
+    model_save_name = paste0(paste0('Documents/data/CBGdata/savedModels/SAT_21_400L_wholeData_modelSAVE_', days_n,
                                     '_days_hypothresh_', hypo_threshold,
                                     '_ratio_', ratio,
                                     '_maxd_', best_params$max_depth,'.model'))
-    model_dump_name = paste0(paste0('Documents/data/CBGdata/savedModels/wholeData_modelDUMP_', days_n,
+    model_dump_name = paste0(paste0('Documents/data/CBGdata/savedModels/SAT_21_400_wholeData_modelDUMP_', days_n,
                                     '_days_hypothresh_', hypo_threshold,
                                     '_ratio_', ratio,
                                     '_maxd_', best_params$max_depth,'.txt'))
@@ -593,7 +593,7 @@ plot(export$min_by_day_13, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 plot(export$min_by_day_6, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 plot(export$min_by_day_1, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
 
-boxplot(export$prediction ~ cut(export$min_by_day_6, 60), varwidth=T)
+boxplot(export$prediction ~ cut(export$min_by_day_20, 60), varwidth=T)
 boxplot(export$prediction ~ cut(export$min_by_day_4, 60), varwidth=T)
 boxplot(export$prediction ~ cut(export$min_by_day_1, 60), varwidth=T)
 
@@ -606,11 +606,11 @@ boxplot(export$prediction ~ cut(export$prior_gradient, 60), varwidth=T)
 boxplot(export$prediction ~ cut(export$prior_cV, 60), varwidth=T)
 boxplot(export$prediction ~ cut(export$prior_N_tests, 60), varwidth=T)
 
-boxplot(export$prediction ~ cut(export$max_by_day_6, 20), varwidth=T)
+boxplot(export$prediction ~ cut(export$max_by_day_20, 20), varwidth=T)
 boxplot(export$prediction ~ cut(export$max_by_day_3, 60), varwidth=T)
 boxplot(export$prediction ~ cut(export$max_by_day_1, 60), varwidth=T)
 
-boxplot(export$prediction ~ cut(export$iqr_by_day_6, 20), varwidth=T)
+boxplot(export$prediction ~ cut(export$iqr_by_day_20, 20), varwidth=T)
 boxplot(export$prediction ~ cut(export$iqr_by_day_3, 60), varwidth=T)
 boxplot(export$prediction ~ cut(export$iqr_by_day_1, 60), varwidth=T)
 
