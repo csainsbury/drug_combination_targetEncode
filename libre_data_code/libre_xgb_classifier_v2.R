@@ -14,22 +14,23 @@ library(caret)
 library(pROC)
 
 # prediction period (15 min increment values)
-hours <- 4
+hours <- 6
 prediction_bin <- hours * 4
 gap_hours <- 0
 gap_bins <- gap_hours * 4
 downsample <- 1
 
-sup_path <- c('~/Documents/data/libre_as_supervised/')
+sup_path <- c('~/Documents/data/libre_as_supervised2/')
 file_list <- list.files(paste0(sup_path))
-n_ids = 15 # need automated way of determining number of IDs data
+n_ids = 31 # need automated way of determining number of IDs data
 
 # n_vec <- c('al1', 'ak1', 'at1','cd1','hm1','mv1','ps1','se1','ek2')
 load_train <- 192 # 192 # 96 # 384
 load_test <- 96
 
 for (n in c(1:n_ids)) {
-  a <- fread(paste0('~/Documents/data/libre_as_supervised/supervised_', n,'_', load_train, '_', load_test, '_vals.csv'))
+  print(n)
+  a <- fread(paste0('~/Documents/data/libre_as_supervised2/supervised_', n,'_', load_train, '_', load_test, '_vals.csv'))
   print(nrow(a))
   if (n == 1) {
     x <- a
@@ -228,11 +229,113 @@ for (j in c(1:ncol(export))) {
 # 
 # export1 <- fread(paste0('Documents/data/libre_data/libre_export/v2_', n_ids,'_IDs_trainBins_', load_train, '_predictionBins_', prediction_bin, '_gapBins_', gap_bins,'.csv'))
 
+##### ##### ##### ##### ##### ##### ##### ##### ##### ##### 
+##### ##### ##### ##### ##### ##### ##### ##### ##### ##### 
+##### build model - bayes opt
+require(ParBayesianOptimization)
+
+splits <- rsample::initial_split(export, prop = 0.7)
+# Training set
+train_df <- rsample::training(splits)
+# Test set
+test_df <- rsample::testing(splits)
+dim(train_df)
+## [1] 354  23
+dim(test_df)
+## [1] 152  23
+
+# The xgboost interface accepts matrices 
+X <- train_df %>%
+  # Remove the target variable
+  select(!id, !label) %>%
+  as.matrix()
+
+# Get the target variable
+y <- train_df %>%
+  pull(label)
+
+# Cross validation folds
+folds <- list(fold1 = as.integer(seq(1, nrow(X), by = 5)),
+              fold2 = as.integer(seq(2, nrow(X), by = 5)),
+              fold3 = as.integer(seq(3, nrow(X), by = 5)),
+              fold4 = as.integer(seq(4, nrow(X), by = 5)),
+              fold5 = as.integer(seq(5, nrow(X), by = 5))
+)
+
+# Function must take the hyper-parameters as inputs
+obj_func <- function(eta, max_depth, min_child_weight, subsample, lambda, alpha) {
+  
+  param <- list(
+    
+    # Hyter parameters 
+    eta = eta,
+    max_depth = max_depth,
+    min_child_weight = min_child_weight,
+    subsample = subsample,
+    lambda = lambda,
+    alpha = alpha,
+    
+    # Tree model 
+    booster = "gbtree",
+    
+    # Regression problem 
+    objective = "binary:logistic",
+    
+    # Use the Mean Absolute Percentage Error
+    eval_metric = "logloss")
+  
+  xgbcv <- xgb.cv(params = param,
+                  data = X,
+                  label = y,
+                  nround = 600,
+                  folds = folds,
+                  prediction = TRUE,
+                  early_stopping_rounds = 50,
+                  verbose = 1,
+                  maximize = F)
+  
+  lst <- list(
+    
+    # First argument must be named as "Score"
+    # Function finds maxima so inverting the output
+    Score = -min(xgbcv$evaluation_log$test_logloss_mean),
+    
+    # Get number of trees for the best performing model
+    nrounds = xgbcv$best_iteration
+  )
+  
+  return(lst)
+}
+
+bounds <- list(eta = c(0.001, 0.6),
+               max_depth = c(1L, 30L),
+               min_child_weight = c(0.1, 100),
+               subsample = c(0.01, 1),
+               lambda = c(0.1, 100),
+               alpha = c(0.1, 100))
+set.seed(42)
+bayes_out <- bayesOpt(FUN = obj_func,
+                      bounds = bounds,
+                      initPoints = length(bounds) + 2,
+                      iters.n = 20,
+                      iters.k = 2,
+                      plotProgress = T)
+
+bayes_out$scoreSummary
+data.frame(getBestPars(bayes_out))
+
+best_params = data.frame(getBestPars(bayes_out))
+## need to save out bayes score summary and best_params for later use / documentation
+## also save out plot
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+
 ##### build model
 ##
 set.seed(42)
 export = data.table(export)
-k = 4
+k = 10
 flds <- createFolds(export$label, k, list = T, returnTrain = F)
 
 auc_vec <- rep(0, k)
@@ -243,7 +346,8 @@ accuracy_v <- rep(0, k)
 balanced_accuracy_v <- rep(0, k)
 f1 <- rep(0, k)
 
-maxd = 4
+# maxd = 4
+use_bayes_opt = 1
 
 for (kfold in c(1:k)) {
   
@@ -266,10 +370,20 @@ for (kfold in c(1:k)) {
   watchlist = list(train=xgb_train, test=xgb_test)
   
   #fit XGBoost model and display training and testing data at each round
-  param <- list(max.depth = maxd, eta = 0.1, nthread = 64, gamma = 2, min_child_weight = 1, objective = 'binary:logistic')
-  model = xgb.train(param, data = xgb_train, watchlist=watchlist,
-                    lambda = 10,
-                    nrounds = 100, verbose = 1)
+  #fit XGBoost model and display training and testing data at each round
+  if (use_bayes_opt == 1) {
+    param <- list(max.depth = best_params$max_depth,
+                  eta = best_params$eta,
+                  min_child_weight = best_params$min_child_weight,
+                  subsample = best_params$subsample,
+                  lambda= best_params$lambda,
+                  alpha = best_params$alpha
+    )
+  } else {
+    param <- list(max.depth = 2, eta = 0.1, nthread = 64, min_child_weight = 1)
+  }
+  
+  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 100, verbose = 1)
   
   # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
   # plot(model$evaluation_log$test_rmse)
@@ -279,7 +393,7 @@ for (kfold in c(1:k)) {
   print(n)
   n_vec[kfold] <- n
   
-  final = xgboost(data = xgb_train, max.depth = maxd, nrounds = n, verbose = 1)
+  final = xgboost(data = xgb_train,  nrounds = n[1], verbose = 1)
   
   pred_y = predict(final, xgb_test)
   # hist(pred_y, 100)

@@ -19,12 +19,12 @@ source('~/Documents/code/cbg_code/cbg_functions.R')
 # install.packages(c('data.table', 'tidyverse', 'tidyquant', 'timetk', 'padr', 'zoo', 'imputeTS', 'xgboost', 'caret', 'pROC'))
 
 dataset <- 'huge'
-days_n  <- 21
+days_n  <- 4
 minimum_n_cbgs <- days_n + 2
 hypo_threshold <- 3
 lockout = 7
 
-ratio = 4
+ratio = 2
 
 exclude_locations <- function(data, exclude_vector) {
   

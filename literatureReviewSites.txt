@@ -1,0 +1,3 @@
+litmaps.com - network diagrams of papers and citations
+paperdigest.org
+elicit.org - fast literature summary of area with natural language prompting
