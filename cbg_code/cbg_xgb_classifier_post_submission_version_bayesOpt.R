@@ -534,11 +534,11 @@ whole_model <- xgb.train(param,
 
 
     ## save out last trained model
-    model_save_name = paste0(paste0('Documents/data/CBGdata/savedModels/SAT_21_400L_wholeData_modelSAVE_', days_n,
+    model_save_name = paste0(paste0('~/Documents/data/CBGdata/savedModels/MON_12_DEC_400L_wholeData_modelSAVE_', days_n,
                                     '_days_hypothresh_', hypo_threshold,
                                     '_ratio_', ratio,
                                     '_maxd_', best_params$max_depth,'.model'))
-    model_dump_name = paste0(paste0('Documents/data/CBGdata/savedModels/SAT_21_400_wholeData_modelDUMP_', days_n,
+    model_dump_name = paste0(paste0('~/Documents/data/CBGdata/savedModels/MON_12_DEC_400_wholeData_modelDUMP_', days_n,
                                     '_days_hypothresh_', hypo_threshold,
                                     '_ratio_', ratio,
                                     '_maxd_', best_params$max_depth,'.txt'))
@@ -584,7 +584,7 @@ importance_matrix[1:20,]
 ## save out prediction data frame
 export$prediction = prediction
 
-write.table(export, file = paste0('Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio,'_WITH_LOO_PRED.csv'), sep = ',', row.names = F)
+write.table(export, file = paste0('~/Documents/data/CBGdata/abstract_exports/export_admissionDuration_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio,'_WITH_LOO_PRED.csv'), sep = ',', row.names = F)
 
 
 plot(export$cV, export$prediction, cex = 0.4, col=rgb(0,0,0,0.4))
@@ -624,7 +624,7 @@ boxplot(export$prediction ~ cut(export$cV, 60), varwidth=T)
 
 ## visualise trees
 require(DiagrammeR)
-jpeg(paste0('Documents/data/CBGdata/treeplots/single_tree_plot_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio, '_maxd_', maxd,'.jpeg'))
+jpeg(paste0('~/Documents/data/CBGdata/treeplots/single_tree_plot_', days_n, '_days_hypothresh_NAs_included_', hypo_threshold, '_ratio_', ratio, '_maxd_', maxd,'.jpeg'))
 xgb.plot.tree(model = model, trees = c(1), render = TRUE)
 dev.off()
 
