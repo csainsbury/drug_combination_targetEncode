@@ -62,7 +62,7 @@ train <- train[id%%n==0]
 
 # down sample n
 case_n = nrow(train[label ==  1]) # n cases
-ratio = 1
+ratio = 2
 
 cases    <- train[label == 1]
 controls <- train[label == 0]
@@ -335,7 +335,7 @@ best_params = data.frame(getBestPars(bayes_out))
 ##
 set.seed(42)
 export = data.table(export)
-k = 10
+k = 6
 flds <- createFolds(export$label, k, list = T, returnTrain = F)
 
 auc_vec <- rep(0, k)
@@ -383,7 +383,7 @@ for (kfold in c(1:k)) {
     param <- list(max.depth = 2, eta = 0.1, nthread = 64, min_child_weight = 1)
   }
   
-  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 100, verbose = 1)
+  model = xgb.train(param, data = xgb_train, watchlist=watchlist, nrounds = 200, verbose = 1)
   
   # model = xgb.train(data = xgb_train, max.depth = maxd, watchlist=watchlist, nrounds = 100, nthread = 16)
   # plot(model$evaluation_log$test_rmse)
