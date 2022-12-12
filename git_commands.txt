@@ -2,3 +2,10 @@ git add .
 git commit -m 'text'
 git push -u origin main
 
+If access token runs out: generate new one at settings/developer/finegrained token access
+Set permissions
+Push as normal, login with username and token in place of password
+
+Token generated 121222 (90 day life):
+
+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
